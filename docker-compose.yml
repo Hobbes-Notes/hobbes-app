@@ -29,6 +29,15 @@ services:
       - AWS_REGION=${AWS_REGION}
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - CORS_ORIGIN=http://localhost:3000
+      - DYNAMODB_ENDPOINT=http://dynamodb-local:7777
+    depends_on:
+      - dynamodb-local
+
+  dynamodb-local:
+    image: amazon/dynamodb-local:latest
+    command: "-jar DynamoDBLocal.jar -sharedDb -inMemory -port 7777"
+    ports:
+      - "7777:7777"
 
 volumes:
   frontend_node_modules: 
