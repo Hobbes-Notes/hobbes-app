@@ -35,9 +35,12 @@ services:
 
   dynamodb-local:
     image: amazon/dynamodb-local:latest
-    command: "-jar DynamoDBLocal.jar -sharedDb -inMemory -port 7777"
+    command: "-jar DynamoDBLocal.jar -sharedDb -port 7777 -dbPath /home/dynamodblocal/data"
     ports:
       - "7777:7777"
+    volumes:
+      - ./.dynamodb:/home/dynamodblocal/data
+    user: root
 
 volumes:
   frontend_node_modules: 
