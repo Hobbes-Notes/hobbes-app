@@ -12,7 +12,7 @@ const ProjectList = () => {
   const navigate = useNavigate();
   const { projectId } = useParams();
   const location = useLocation();
-  const isNotesTab = location.pathname === '/notes';
+  const isNotesTab = location.pathname.startsWith('/notes');
 
   useEffect(() => {
     if (isNotesTab) {
@@ -74,18 +74,13 @@ const ProjectList = () => {
         <button
           key={project.id}
           onClick={() => navigate(`/projects/${project.id}`)}
-          className={`w-full text-left px-4 py-3 rounded-lg transition-colors ${
+          className={`w-full text-left px-4 py-2 rounded-lg transition-colors ${
             projectId === project.id 
               ? 'bg-blue-50 text-blue-700 font-medium border border-blue-100' 
               : 'hover:bg-gray-50'
           }`}
         >
-          <div className="font-medium text-gray-900">{project.name}</div>
-          {project.description && (
-            <div className="text-sm text-gray-500 truncate mt-1">
-              {project.description}
-            </div>
-          )}
+          <div className="font-medium text-gray-900 truncate">{project.name}</div>
         </button>
       ))}
     </div>
@@ -94,26 +89,18 @@ const ProjectList = () => {
   const NotesTab = () => (
     <div className="space-y-4">
       {notes.map((note) => (
-        <div
+        <button
           key={note.id}
-          className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 hover:shadow-md transition-shadow"
+          onClick={() => navigate(`/notes/${note.id}`)}
+          className="w-full text-left bg-white rounded-lg shadow-sm border border-gray-200 p-3 hover:shadow-md transition-shadow hover:border-gray-300"
         >
-          <div className="prose max-w-none">
-            <p className="text-gray-900 text-sm line-clamp-3">{note.content}</p>
+          <div className="text-sm text-gray-900 truncate">
+            {note.content}
           </div>
-          <div className="mt-2 flex items-center justify-between text-xs text-gray-500">
-            <div>
-              {new Date(note.created_at).toLocaleString()}
-            </div>
-            {note.linked_projects?.length > 0 && (
-              <div className="flex gap-1">
-                <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                  {note.linked_projects.length} project{note.linked_projects.length !== 1 ? 's' : ''}
-                </span>
-              </div>
-            )}
+          <div className="mt-1 text-xs text-gray-500">
+            {new Date(note.created_at).toLocaleString()}
           </div>
-        </div>
+        </button>
       ))}
     </div>
   );
@@ -143,7 +130,7 @@ const ProjectList = () => {
                   : 'text-gray-500 hover:text-gray-700'
               }`}
             >
-              All Notes
+              Notes
             </Link>
           </div>
 
