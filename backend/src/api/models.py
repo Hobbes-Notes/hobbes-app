@@ -1,31 +1,30 @@
 from pydantic import BaseModel
-from typing import Optional, List
-from datetime import datetime
+from typing import List, Optional, Set
 
 class ProjectCreate(BaseModel):
     name: str
     description: Optional[str] = None
 
-class ProjectUpdate(BaseModel):
-    name: Optional[str] = None
+class Project(BaseModel):
+    id: str
+    name: str
     description: Optional[str] = None
-    summary: Optional[str] = None
+    summary: str = ""
+    created_at: str
 
 class NoteCreate(BaseModel):
     content: str
 
 class Note(BaseModel):
-    project_id: str
-    created_at: str
+    id: str
     content: str
-    id: str
-
-class Project(BaseModel):
-    id: str
-    name: str
-    description: Optional[str]
-    summary: Optional[str]
     created_at: str
+    linked_projects: List[str] = []  # List of project IDs this note is linked to
+
+class ProjectUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    summary: Optional[str] = None
 
 class ChatMessage(BaseModel):
     content: str
