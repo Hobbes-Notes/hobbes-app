@@ -216,13 +216,19 @@ async def update_project_summary(project: dict, new_note_content: str):
 async def get_project(project_id: str):
     projects_table = dynamodb.Table('Projects')
     try:
+        logger.info(f"Fetching project with ID: {project_id}")
         response = projects_table.get_item(Key={'id': project_id})
+        
         if 'Item' not in response:
+            logger.warning(f"Project not found with ID: {project_id}")
             raise HTTPException(status_code=404, detail="Project not found")
+            
+        logger.info(f"Successfully fetched project: {project_id}")
         return response['Item']
     except Exception as e:
-        logger.error(f"Error fetching project: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        error_msg = f"Error fetching project {project_id}: {str(e)}"
+        logger.error(error_msg, exc_info=True)
+        raise HTTPException(status_code=500, detail=error_msg)
 
 @router.get("/projects", response_model=List[Project])
 async def list_projects():
