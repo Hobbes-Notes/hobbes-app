@@ -8,6 +8,7 @@ const ProjectDetail = () => {
   const [notes, setNotes] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [activeTab, setActiveTab] = useState('summary'); // 'summary' or 'notes'
 
   const fetchProjectData = useCallback(async () => {
     if (!projectId) return;
@@ -45,7 +46,46 @@ const ProjectDetail = () => {
     return () => clearInterval(pollInterval);
   }, [projectId, fetchProjectData]);
 
-  if (loading && !project) { // Only show loading on initial load
+  const SummaryTab = () => (
+    <div className="space-y-6">
+      <div className="bg-white rounded-lg shadow-sm p-6">
+        <h3 className="text-lg font-medium text-gray-900 mb-4">Project Summary</h3>
+        {project?.summary ? (
+          <div className="prose max-w-none">
+            <p className="text-gray-600">{project.summary}</p>
+          </div>
+        ) : (
+          <p className="text-gray-500 italic">No summary available yet. Add some notes to generate a summary.</p>
+        )}
+      </div>
+    </div>
+  );
+
+  const NotesTab = () => (
+    <div className="space-y-4">
+      {notes.length === 0 ? (
+        <div className="text-center text-gray-500 py-8">
+          No notes linked to this project yet.
+        </div>
+      ) : (
+        notes.map((note) => (
+          <div
+            key={note.id}
+            className="bg-white rounded-lg shadow-sm border border-gray-200 p-6"
+          >
+            <div className="prose max-w-none">
+              <p className="text-gray-900 whitespace-pre-wrap">{note.content}</p>
+            </div>
+            <div className="mt-3 text-sm text-gray-500">
+              {new Date(note.created_at).toLocaleString()}
+            </div>
+          </div>
+        ))
+      )}
+    </div>
+  );
+
+  if (loading && !project) {
     return <div className="flex items-center justify-center h-full">Loading...</div>;
   }
 
@@ -56,11 +96,6 @@ const ProjectDetail = () => {
         <p className="text-gray-600 max-w-md">
           Select a project from the list on the left or create a new project to get started.
         </p>
-        <div className="mt-8">
-          <svg className="w-32 h-32 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-          </svg>
-        </div>
       </div>
     );
   }
@@ -74,45 +109,43 @@ const ProjectDetail = () => {
   }
 
   return (
-    <div className="space-y-6 max-w-4xl mx-auto p-6">
-      <div>
+    <div className="max-w-4xl mx-auto p-6">
+      <div className="mb-6">
         <h1 className="text-3xl font-bold text-gray-900">{project.name}</h1>
         {project.description && (
           <p className="text-gray-600 mt-2">{project.description}</p>
         )}
       </div>
 
-      {project.summary && (
-        <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-          <h3 className="font-medium text-gray-900 mb-2">Summary</h3>
-          <p className="text-gray-600">{project.summary}</p>
+      {/* Tabs */}
+      <div className="border-b border-gray-200 mb-6">
+        <div className="flex space-x-8">
+          <button
+            onClick={() => setActiveTab('summary')}
+            className={`py-4 px-1 relative ${
+              activeTab === 'summary'
+                ? 'text-blue-600 border-b-2 border-blue-600'
+                : 'text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            Summary
+          </button>
+          <button
+            onClick={() => setActiveTab('notes')}
+            className={`py-4 px-1 relative ${
+              activeTab === 'notes'
+                ? 'text-blue-600 border-b-2 border-blue-600'
+                : 'text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            Related Notes
+          </button>
         </div>
-      )}
+      </div>
 
-      <div>
-        <div className="flex justify-between items-center mb-4">
-          <h2 className="text-xl font-semibold text-gray-900">Related Notes</h2>
-          {loading && <span className="text-sm text-gray-500">Refreshing...</span>}
-        </div>
-        <div className="space-y-4 h-[500px] overflow-y-auto pr-4">
-          {notes.length === 0 ? (
-            <div className="text-center text-gray-500 py-8">
-              No notes linked to this project yet.
-            </div>
-          ) : (
-            notes.map((note) => (
-              <div
-                key={note.id}
-                className="bg-white rounded-lg border border-gray-200 p-4 space-y-2"
-              >
-                <p className="text-gray-700">{note.content}</p>
-                <p className="text-sm text-gray-500">
-                  {new Date(note.created_at).toLocaleString()}
-                </p>
-              </div>
-            ))
-          )}
-        </div>
+      {/* Tab Content */}
+      <div className="mt-6">
+        {activeTab === 'summary' ? <SummaryTab /> : <NotesTab />}
       </div>
     </div>
   );
