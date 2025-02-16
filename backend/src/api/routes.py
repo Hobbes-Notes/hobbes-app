@@ -27,63 +27,64 @@ dynamodb = boto3.resource(
     endpoint_url=os.getenv('DYNAMODB_ENDPOINT', 'http://dynamodb-local:7777')
 )
 
-def delete_table_if_exists(table_name: str):
-    try:
-        table = dynamodb.Table(table_name)
-        table.delete()
-        table.wait_until_not_exists()
-        logger.info(f"Deleted existing table: {table_name}")
-    except Exception as e:
-        if 'ResourceNotFoundException' not in str(e):
-            logger.error(f"Error deleting table {table_name}: {str(e)}")
-
 # Create tables if they don't exist
 def create_tables():
-    # Delete existing tables first
-    delete_table_if_exists('Projects')
-    delete_table_if_exists('Notes')
-    
-    time.sleep(5)  # Wait for tables to be fully deleted
-    
-    # Projects table
     try:
-        dynamodb.create_table(
-            TableName='Projects',
-            KeySchema=[
-                {'AttributeName': 'id', 'KeyType': 'HASH'}
-            ],
-            AttributeDefinitions=[
-                {'AttributeName': 'id', 'AttributeType': 'S'}
-            ],
-            ProvisionedThroughput={
-                'ReadCapacityUnits': 5,
-                'WriteCapacityUnits': 5
-            }
-        )
-        logger.info("Projects table created")
-    except Exception as e:
-        logger.error(f"Error creating Projects table: {str(e)}")
-        raise e
+        # Get list of existing tables
+        existing_tables = [table.name for table in dynamodb.tables.all()]
+        logger.info(f"Existing tables: {existing_tables}")
+        
+        # Create Projects table if it doesn't exist
+        if 'Projects' not in existing_tables:
+            logger.info("Creating Projects table...")
+            dynamodb.create_table(
+                TableName='Projects',
+                KeySchema=[
+                    {'AttributeName': 'id', 'KeyType': 'HASH'}
+                ],
+                AttributeDefinitions=[
+                    {'AttributeName': 'id', 'AttributeType': 'S'}
+                ],
+                ProvisionedThroughput={
+                    'ReadCapacityUnits': 5,
+                    'WriteCapacityUnits': 5
+                }
+            )
+            logger.info("Projects table created successfully")
+        else:
+            logger.info("Projects table already exists")
 
-    # Notes table with new structure
-    try:
-        dynamodb.create_table(
-            TableName='Notes',
-            KeySchema=[
-                {'AttributeName': 'id', 'KeyType': 'HASH'}
-            ],
-            AttributeDefinitions=[
-                {'AttributeName': 'id', 'AttributeType': 'S'}
-            ],
-            ProvisionedThroughput={
-                'ReadCapacityUnits': 5,
-                'WriteCapacityUnits': 5
-            }
-        )
-        logger.info("Notes table created")
+        # Create Notes table if it doesn't exist
+        if 'Notes' not in existing_tables:
+            logger.info("Creating Notes table...")
+            dynamodb.create_table(
+                TableName='Notes',
+                KeySchema=[
+                    {'AttributeName': 'id', 'KeyType': 'HASH'}
+                ],
+                AttributeDefinitions=[
+                    {'AttributeName': 'id', 'AttributeType': 'S'}
+                ],
+                ProvisionedThroughput={
+                    'ReadCapacityUnits': 5,
+                    'WriteCapacityUnits': 5
+                }
+            )
+            logger.info("Notes table created successfully")
+        else:
+            logger.info("Notes table already exists")
+
+        # Wait for tables to be active if they were just created
+        if 'Projects' not in existing_tables or 'Notes' not in existing_tables:
+            logger.info("Waiting for tables to be active...")
+            dynamodb.Table('Projects').wait_until_exists()
+            dynamodb.Table('Notes').wait_until_exists()
+            logger.info("All tables are active")
+            
     except Exception as e:
-        logger.error(f"Error creating Notes table: {str(e)}")
-        raise e
+        error_msg = f"Error managing tables: {str(e)}"
+        logger.error(error_msg, exc_info=True)
+        raise Exception(error_msg)
 
 async def check_project_relevance(content: str, project: dict) -> bool:
     """Check if note content is relevant to a project using LLM."""
@@ -358,6 +359,6 @@ async def get_note(note_id: str):
 # Recreate tables on startup
 @router.on_event("startup")
 async def startup_event():
-    logger.info("Starting table recreation process")
+    logger.info("Starting table initialization process")
     create_tables()
-    logger.info("Table recreation complete") 
+    logger.info("Table initialization complete") 
