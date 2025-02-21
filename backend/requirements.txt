@@ -7,4 +7,7 @@ pydantic>=2.4.2
 requests==2.31.0
 python-multipart==0.0.6
 pytest==7.4.3
-httpx==0.26.0  # For testing 
+httpx==0.26.0  # For testing
+google-auth==2.27.0  # For Google OAuth
+google-auth-oauthlib==1.2.0  # For Google OAuth
+email-validator==2.1.0  # For email validation 
