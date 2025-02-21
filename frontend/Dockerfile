@@ -11,6 +11,7 @@ RUN npm install
 # No need to copy source code as we'll use volumes
 # COPY . .
 
+# Expose port 3000
 EXPOSE 3000
 
 # Run development server with hot reloading

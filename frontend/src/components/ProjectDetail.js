@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import { getProject, getNotes } from '../services/api';
+import ReactMarkdown from 'react-markdown';
 
 const ProjectDetail = () => {
   const { projectId } = useParams();
@@ -51,8 +52,8 @@ const ProjectDetail = () => {
       <div className="bg-white rounded-lg shadow-sm p-6">
         <h3 className="text-lg font-medium text-gray-900 mb-4">Project Summary</h3>
         {project?.summary ? (
-          <div className="prose max-w-none">
-            <p className="text-gray-600">{project.summary}</p>
+          <div className="prose prose-sm max-w-none">
+            <ReactMarkdown>{project.summary}</ReactMarkdown>
           </div>
         ) : (
           <p className="text-gray-500 italic">No summary available yet. Add some notes to generate a summary.</p>
