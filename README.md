@@ -42,10 +42,30 @@ PROJECT SETUP
    Create frontend/.env:
    REACT_APP_API_URL=http://localhost:8888
 
-2. FIRST TIME BUILD & START
-   Run: make init
+2. INITIALIZE AND START APPLICATION
+   ```bash
+   make init
+   ```
+   This command will:
+   - Install dependencies
+   - Set up environment files
+   - Build and start all services
 
-3. ACCESS THE APP
+3. MANAGE DATA
+   To clear all data (e.g., when you want to start fresh):
+   ```bash
+   make clean-data  # This will stop the application and clear all data
+   make init        # You can then start the application again
+   ```
+
+4. INGEST SAMPLE DATA
+   After the application is running, you can load sample data:
+   ```bash
+   cd scripts
+   python ingest_notes.py
+   ```
+
+5. ACCESS THE APP
    - Website: http://localhost:3000
    - API: http://localhost:8888
 
