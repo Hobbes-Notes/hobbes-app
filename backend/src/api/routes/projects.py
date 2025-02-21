@@ -4,7 +4,8 @@ from litellm import completion
 import os
 from datetime import datetime
 import uuid
-from .models import *
+from typing import List, Optional
+from api.models import Project, ProjectCreate, Note, NoteCreate
 import logging
 import time
 from dotenv import load_dotenv
@@ -212,6 +213,39 @@ async def update_project_summary(project: dict, new_note_content: str):
         logger.error(f"Error updating summary for project '{project['name']}': {str(e)}")
         raise
 
+async def get_or_create_misc_project(user_id: str) -> dict:
+    """Get or create the Miscellaneous project for a user."""
+    projects_table = dynamodb.Table('Projects')
+    try:
+        # Try to find existing Miscellaneous project
+        response = projects_table.scan(
+            FilterExpression='user_id = :uid AND #name = :name',
+            ExpressionAttributeNames={'#name': 'name'},
+            ExpressionAttributeValues={':uid': user_id, ':name': 'Miscellaneous'}
+        )
+        
+        if response.get('Items'):
+            return response['Items'][0]
+            
+        # Create new Miscellaneous project if not found
+        project_id = str(uuid.uuid4())
+        timestamp = datetime.utcnow().isoformat()
+        
+        item = {
+            'id': project_id,
+            'name': 'Miscellaneous',
+            'description': 'Default project for uncategorized notes',
+            'summary': '',
+            'created_at': timestamp,
+            'user_id': user_id
+        }
+        
+        projects_table.put_item(Item=item)
+        return item
+    except Exception as e:
+        logger.error(f"Error managing Miscellaneous project: {str(e)}")
+        raise
+
 # Project endpoints
 @router.get("/projects/{project_id}", response_model=Project)
 async def get_project(project_id: str):
@@ -247,20 +281,29 @@ async def create_project(project: ProjectCreate):
     project_id = str(uuid.uuid4())
     timestamp = datetime.utcnow().isoformat()
     
-    item = {
-        'id': project_id,
-        'name': project.name,
-        'description': project.description,
-        'summary': '',
-        'created_at': timestamp
-    }
-    
     try:
+        logger.info(f"Creating project: {project.name} for user: {project.user_id}")
+        logger.info(f"Project details - ID: {project_id}, Description: {project.description}")
+        
+        item = {
+            'id': project_id,
+            'name': project.name,
+            'description': project.description,
+            'summary': '',
+            'created_at': timestamp,
+            'user_id': project.user_id
+        }
+        
+        logger.info(f"Project data to be stored: {item}")
         projects_table.put_item(Item=item)
+        logger.info(f"Successfully created project: {project_id}")
+        
         return item
     except Exception as e:
-        logger.error(f"Error creating project: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        error_msg = f"Error creating project: {str(e)}"
+        logger.error(error_msg, exc_info=True)
+        logger.error(f"Failed project data: {project_id=}, {project.name=}, {project.user_id=}")
+        raise HTTPException(status_code=500, detail=error_msg)
 
 # Note endpoints with new structure
 @router.post("/notes", response_model=Note)
@@ -283,37 +326,58 @@ async def create_note(note: NoteCreate):
         logger.info(f"Found {len(projects)} projects to check for relevance")
         
         relevant_projects = []
+        project_names = []
         
         for project in projects:
-            logger.info(f"Checking relevance for project: {project['name']}")
-            is_relevant = await check_project_relevance(note.content, project)
-            
-            if is_relevant:
-                logger.info(f"Note is relevant to project '{project['name']}'. Updating summary...")
-                # Generate new summary incorporating the new note
-                new_summary = await update_project_summary(project, note.content)
+            if project['name'] != 'Miscellaneous':
+                logger.info(f"Checking relevance for project: {project['name']}")
+                is_relevant = await check_project_relevance(note.content, project)
                 
-                logger.info(f"Updating project '{project['name']}' with new summary")
-                # Update project with new summary
+                if is_relevant:
+                    relevant_projects.append(project['id'])
+                    project_names.append(project['name'])
+                    
+                    # Update project summary
+                    try:
+                        logger.info(f"Updating summary for project: {project['name']}")
+                        new_summary = await update_project_summary(project, note.content)
+                        projects_table.update_item(
+                            Key={'id': project['id']},
+                            UpdateExpression='SET summary = :summary',
+                            ExpressionAttributeValues={':summary': new_summary}
+                        )
+                        logger.info(f"Summary updated for project: {project['name']}")
+                    except Exception as e:
+                        logger.error(f"Error updating summary for project {project['name']}: {str(e)}")
+                        # Continue with note creation even if summary update fails
+        
+        # If no relevant projects found, add to Miscellaneous project
+        if not relevant_projects:
+            logger.info("No relevant projects found, adding to Miscellaneous")
+            misc_project = await get_or_create_misc_project(note.user_id)
+            relevant_projects.append(misc_project['id'])
+            project_names.append('Miscellaneous')
+            
+            # Update Miscellaneous project summary
+            try:
+                logger.info("Updating Miscellaneous project summary")
+                new_summary = await update_project_summary(misc_project, note.content)
                 projects_table.update_item(
-                    Key={'id': project['id']},
+                    Key={'id': misc_project['id']},
                     UpdateExpression='SET summary = :summary',
                     ExpressionAttributeValues={':summary': new_summary}
                 )
-                
-                relevant_projects.append(project['id'])
-                logger.info(f"Project '{project['name']}' updated successfully")
-            else:
-                logger.info(f"Note is not relevant to project '{project['name']}'")
-        
-        logger.info(f"Note is relevant to {len(relevant_projects)} projects")
+                logger.info("Miscellaneous project summary updated")
+            except Exception as e:
+                logger.error(f"Error updating Miscellaneous project summary: {str(e)}")
         
         # Create note item
         note_item = {
             'id': note_id,
             'created_at': timestamp,
             'content': note.content,
-            'linked_projects': relevant_projects
+            'linked_projects': relevant_projects,
+            'user_id': note.user_id
         }
         
         # Save note
@@ -354,6 +418,43 @@ async def get_note(note_id: str):
         return response['Item']
     except Exception as e:
         logger.error(f"Error fetching note: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.delete("/projects/{project_id}")
+async def delete_project(project_id: str):
+    """Delete a project and its associated notes"""
+    projects_table = dynamodb.Table('Projects')
+    notes_table = dynamodb.Table('Notes')
+    
+    try:
+        # Check if project exists
+        response = projects_table.get_item(Key={'id': project_id})
+        if 'Item' not in response:
+            raise HTTPException(status_code=404, detail="Project not found")
+            
+        project = response['Item']
+        
+        # Delete all notes linked to this project
+        notes = notes_table.scan(
+            FilterExpression='contains(linked_projects, :pid)',
+            ExpressionAttributeValues={':pid': project_id}
+        ).get('Items', [])
+        
+        # Update notes to remove this project from linked_projects
+        for note in notes:
+            updated_projects = [p for p in note['linked_projects'] if p != project_id]
+            notes_table.update_item(
+                Key={'id': note['id']},
+                UpdateExpression='SET linked_projects = :projects',
+                ExpressionAttributeValues={':projects': updated_projects}
+            )
+        
+        # Delete the project
+        projects_table.delete_item(Key={'id': project_id})
+        
+        return {"message": "Project deleted successfully"}
+    except Exception as e:
+        logger.error(f"Error deleting project {project_id}: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 # Recreate tables on startup

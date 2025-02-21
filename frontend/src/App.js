@@ -1,47 +1,68 @@
 import React from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate, Outlet } from 'react-router-dom';
-import ProjectList from './components/ProjectList';
-import ProjectDetail from './components/ProjectDetail';
-import NoteDetail from './components/NoteDetail';
-import AddNoteForm from './components/AddNoteForm';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { GoogleOAuthProvider } from '@react-oauth/google';
+import { AuthProvider } from './hooks/useAuth';
+import { ProtectedRoute } from './components/ProtectedRoute';
+import LoginPage from './components/LoginPage';
+import ProfilePage from './components/ProfilePage';
+import ProjectsPage from './components/ProjectsPage';
+import NotesPage from './components/NotesPage';
+import ProjectView from './components/ProjectView';
+import { useAuth } from './hooks/useAuth';
 
-const Layout = () => {
-    return (
-        <div className="min-h-screen bg-gray-50 flex flex-col">
-            <div className="flex-1 relative">
-                <div className="absolute inset-0 pb-[200px] overflow-y-auto">
-                    <Outlet />
-                </div>
-            </div>
-            <AddNoteForm />
-        </div>
-    );
+const PrivateRoute = ({ children }) => {
+  const { user } = useAuth();
+  return user ? children : <Navigate to="/login" />;
 };
 
 function App() {
-    return (
-        <Router>
+  const clientId = process.env.REACT_APP_GOOGLE_CLIENT_ID;
+
+  if (!clientId) {
+    console.error('REACT_APP_GOOGLE_CLIENT_ID is not set');
+    return <div>Error: Google Client ID not configured</div>;
+  }
+
+  return (
+    <GoogleOAuthProvider clientId={clientId}>
+      <Router>
+        <AuthProvider>
+          <div className="min-h-screen bg-gray-100">
             <Routes>
-                <Route element={<Layout />}>
-                    <Route path="/" element={<Navigate to="/projects" replace />} />
-                    <Route path="/*" element={<ProjectList />}>
-                        <Route path="projects/:projectId" element={<ProjectDetail />} />
-                        <Route path="notes/:noteId" element={<NoteDetail />} />
-                        <Route path="projects" element={
-                            <div className="flex items-center justify-center h-full text-gray-500">
-                                Select a project or create a new one
-                            </div>
-                        } />
-                        <Route path="notes" element={
-                            <div className="flex items-center justify-center h-full text-gray-500">
-                                Select a note to view details
-                            </div>
-                        } />
-                    </Route>
-                </Route>
+              <Route path="/login" element={<LoginPage />} />
+              <Route path="/" element={<PrivateRoute><ProjectsPage /></PrivateRoute>} />
+              <Route
+                path="/projects"
+                element={
+                  <ProtectedRoute>
+                    <ProjectsPage />
+                  </ProtectedRoute>
+                }
+              >
+                <Route path=":projectId" element={<ProjectView />} />
+              </Route>
+              <Route
+                path="/projects/:projectId/notes"
+                element={
+                  <ProtectedRoute>
+                    <NotesPage />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/profile"
+                element={
+                  <ProtectedRoute>
+                    <ProfilePage />
+                  </ProtectedRoute>
+                }
+              />
             </Routes>
-        </Router>
-    );
+          </div>
+        </AuthProvider>
+      </Router>
+    </GoogleOAuthProvider>
+  );
 }
 
 export default App; 
