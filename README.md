@@ -61,8 +61,7 @@ PROJECT SETUP
 4. INGEST SAMPLE DATA
    After the application is running, you can load sample data:
    ```bash
-   cd scripts
-   python ingest_notes.py
+   make ingest-data
    ```
 
 5. ACCESS THE APP
