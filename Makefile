@@ -53,10 +53,16 @@ clean: check-docker
 	rm -rf backend/src/api/__pycache__
 	@echo "Cleanup complete!"
 
-clean-data: stop
+# Clear all data
+clear-data: stop
 	@echo "Clearing all data..."
 	rm -rf .dynamodb/*
 	@echo "Data cleared successfully!"
+
+# Ingest sample data
+ingest-data:
+	@echo "Ingesting sample data..."
+	python3 scripts/ingest_notes.py
 
 # Build containers
 build: check-docker
