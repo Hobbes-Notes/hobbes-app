@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useOutletContext } from 'react-router-dom';
 import { useApiService } from '../services/api';
 import ReactMarkdown from 'react-markdown';
@@ -12,9 +12,13 @@ const ProjectView = () => {
   const [error, setError] = useState(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState('summary'); // 'summary' or 'notes'
+  const [hasMore, setHasMore] = useState(false);
+  const [currentCursor, setCurrentCursor] = useState(null);
+  const [currentPage, setCurrentPage] = useState(1);
   const { projectId } = useParams();
   const { getProject, getNotes } = useApiService();
   const { onNoteCreated: parentNoteCreated } = useOutletContext() || {};
+  const notesContainerRef = useRef(null);
 
   const fetchProjectData = useCallback(async (silent = false) => {
     if (!projectId) return;
@@ -33,19 +37,51 @@ const ProjectView = () => {
     }
   }, [projectId, getProject]);
 
-  const fetchNotes = useCallback(async (silent = false) => {
+  const fetchNotes = useCallback(async (silent = false, cursor = null) => {
     if (!projectId) return;
     
     try {
       if (!silent) setNotesLoading(true);
-      const notesResponse = await getNotes(projectId);
-      setNotes(notesResponse.data);
+      const notesResponse = await getNotes(projectId, null, currentPage, 10, cursor);
+      const newNotes = notesResponse.data.items;
+      
+      // Append new notes to existing ones for infinite scroll
+      setNotes(prev => cursor ? [...prev, ...newNotes] : newNotes);
+      setHasMore(notesResponse.data.has_more);
+      setCurrentCursor(notesResponse.data.LastEvaluatedKey);
     } catch (err) {
       console.error('Error fetching notes:', err);
     } finally {
       if (!silent) setNotesLoading(false);
     }
-  }, [projectId, getNotes]);
+  }, [projectId, getNotes, currentPage]);
+
+  const handleScroll = useCallback(() => {
+    if (!notesContainerRef.current || !hasMore || notesLoading) return;
+
+    const container = notesContainerRef.current;
+    const { scrollTop, scrollHeight, clientHeight } = container;
+    
+    // Load more when user scrolls to bottom (with 50px threshold)
+    if (scrollHeight - scrollTop - clientHeight < 50) {
+      setCurrentPage(prev => prev + 1);
+      fetchNotes(true, currentCursor);
+    }
+  }, [hasMore, notesLoading, currentCursor, fetchNotes]);
+
+  useEffect(() => {
+    const container = notesContainerRef.current;
+    if (container && activeTab === 'notes') {
+      container.addEventListener('scroll', handleScroll);
+      return () => container.removeEventListener('scroll', handleScroll);
+    }
+  }, [handleScroll, activeTab]);
+
+  useEffect(() => {
+    if (projectId && activeTab === 'notes') {
+      fetchNotes();
+    }
+  }, [projectId, fetchNotes, activeTab, currentPage]);
 
   const refreshData = useCallback(async (silent = false) => {
     await Promise.all([
@@ -58,25 +94,14 @@ const ProjectView = () => {
   const handleNoteCreated = useCallback(async (newNote) => {
     if (!newNote) return;
 
-    // Check if the note belongs to this project
-    if (newNote.linked_projects?.includes(projectId)) {
-      // First update the notes list optimistically
-      setNotes(prevNotes => {
-        // Check if note already exists to prevent duplicates
-        const exists = prevNotes.some(note => note.id === newNote.id);
-        if (exists) return prevNotes;
-        return [newNote, ...prevNotes];
-      });
-
-      // Refresh both project and notes data silently
-      await refreshData(true);
-    }
+    // Always refresh project data silently to get updated summary
+    await refreshData(true);
 
     // Call parent note created handler
     if (parentNoteCreated) {
       parentNoteCreated(newNote);
     }
-  }, [projectId, refreshData, parentNoteCreated]);
+  }, [refreshData, parentNoteCreated]);
 
   // Initial data fetch
   useEffect(() => {
@@ -137,7 +162,7 @@ const ProjectView = () => {
   }
 
   return (
-    <div className="p-6 max-w-4xl mx-auto">
+    <div className="container mx-auto px-4 py-8">
       <div className="mb-6 flex justify-between items-center">
         <div>
           <h1 className="text-3xl font-bold text-gray-900">{project.name}</h1>
@@ -178,7 +203,7 @@ const ProjectView = () => {
                   : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
               }`}
             >
-              Notes ({notes.length})
+              Notes
             </button>
           </nav>
         </div>
@@ -195,30 +220,30 @@ const ProjectView = () => {
               )}
             </div>
           ) : (
-            <div className="space-y-4">
-              {notesLoading ? (
-                <div className="flex justify-center py-8">
+            <div 
+              ref={notesContainerRef}
+              className="space-y-4 max-h-[600px] overflow-y-auto"
+            >
+              {notes.map((note) => (
+                <div
+                  key={note.id}
+                  className="bg-white rounded-lg shadow-sm border border-gray-200 p-4"
+                >
+                  <p className="text-gray-900 whitespace-pre-wrap">{note.content}</p>
+                  <p className="mt-2 text-sm text-gray-500">
+                    {new Date(note.created_at).toLocaleString()}
+                  </p>
+                </div>
+              ))}
+              {notesLoading && (
+                <div className="flex justify-center py-4">
                   <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-500"></div>
                 </div>
-              ) : (
-                <>
-                  {notes.map((note) => (
-                    <div
-                      key={note.id}
-                      className="bg-white rounded-lg shadow-sm border border-gray-200 p-4"
-                    >
-                      <p className="text-gray-900 whitespace-pre-wrap">{note.content}</p>
-                      <p className="mt-2 text-sm text-gray-500">
-                        {new Date(note.created_at).toLocaleString()}
-                      </p>
-                    </div>
-                  ))}
-                  {notes.length === 0 && (
-                    <p className="text-gray-500 text-center py-8">
-                      No notes yet. Start adding notes to this project.
-                    </p>
-                  )}
-                </>
+              )}
+              {!notesLoading && notes.length === 0 && (
+                <p className="text-gray-500 text-center py-8">
+                  No notes yet. Start adding notes to this project.
+                </p>
               )}
             </div>
           )}

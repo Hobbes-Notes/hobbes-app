@@ -32,10 +32,9 @@ const GlobalNoteInput = ({ projects, onNoteCreated }) => {
       setError(null);
       
       // Get project names for notification
-      const linkedProjects = newNote.linked_projects
-        .map(projectId => projects.find(p => p.id === projectId))
-        .filter(Boolean)
-        .map(p => p.name);
+      const linkedProjects = newNote.projects
+        .map(project => project.name)
+        .filter(Boolean);
       
       if (linkedProjects.length > 0) {
         setNotification({

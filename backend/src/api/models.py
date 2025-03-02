@@ -49,12 +49,48 @@ class NoteCreate(BaseModel):
     content: str
     user_id: str
 
+class ProjectRef(BaseModel):
+    id: str
+    name: str
+
 class Note(BaseModel):
     id: str
     content: str
     created_at: str
-    user_id: str  # Owner of the note
-    linked_projects: List[str] = []  # List of project IDs this note is linked to
+    user_id: str
+    projects: List[ProjectRef] = []  # For response, includes project details
+
+class PaginatedNotes(BaseModel):
+    """Paginated response for notes listing."""
+    items: List[Note]
+    page: int
+    page_size: int
+    has_more: bool
+    LastEvaluatedKey: Optional[Dict] = None
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "items": [
+                    {
+                        "id": "123",
+                        "content": "Sample note",
+                        "created_at": "2024-03-02T12:00:00Z",
+                        "user_id": "user123",
+                        "projects": [
+                            {
+                                "id": "project123",
+                                "name": "Project Name"
+                            }
+                        ]
+                    }
+                ],
+                "page": 1,
+                "page_size": 10,
+                "has_more": False,
+                "LastEvaluatedKey": None
+            }
+        }
 
 class ProjectUpdate(BaseModel):
     name: Optional[str] = None

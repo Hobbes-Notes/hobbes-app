@@ -14,7 +14,7 @@ const NotesPage = () => {
       try {
         setLoading(true);
         const response = await getNotes(projectId);
-        setNotes(response.data);
+        setNotes(response.data.items || []);
         setError(null);
       } catch (err) {
         console.error('Error fetching notes:', err);
