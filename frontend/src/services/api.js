@@ -117,8 +117,14 @@ export const useApiService = () => {
     }, [api]),
 
     // Notes
-    getNotes: useCallback(async (projectId) => {
-      return api.get(`/notes${projectId ? `?project_id=${projectId}` : ''}`);
+    getNotes: useCallback(async (projectId, userId, page = 1, pageSize = 10, cursor = null) => {
+      const params = new URLSearchParams();
+      if (projectId) params.append('project_id', projectId);
+      if (userId) params.append('user_id', userId);
+      if (cursor) params.append('exclusive_start_key', JSON.stringify(cursor));
+      params.append('page', page);
+      params.append('page_size', pageSize);
+      return api.get(`/notes?${params.toString()}`);
     }, [api]),
 
     getAllNotes: useCallback(async () => {
@@ -133,4 +139,4 @@ export const useApiService = () => {
       return api.post('/notes', { content, user_id });
     }, [api])
   };
-}; 
+};

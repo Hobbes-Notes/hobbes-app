@@ -1,16 +1,17 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 import boto3
 from litellm import completion
 import os
 from datetime import datetime
 import uuid
-from typing import List, Optional
-from api.models import Project, ProjectCreate, Note, NoteCreate, ProjectUpdate
+from typing import List, Optional, Dict
+from api.models import Project, ProjectCreate, Note, NoteCreate, ProjectUpdate, PaginatedNotes
 import logging
 import time
 from dotenv import load_dotenv
 from fastapi import Depends
 from boto3.dynamodb.conditions import Key
+import json
 
 # Load environment variables
 load_dotenv()
@@ -66,7 +67,25 @@ def create_tables():
                     {'AttributeName': 'id', 'KeyType': 'HASH'}
                 ],
                 AttributeDefinitions=[
-                    {'AttributeName': 'id', 'AttributeType': 'S'}
+                    {'AttributeName': 'id', 'AttributeType': 'S'},
+                    {'AttributeName': 'user_id', 'AttributeType': 'S'},
+                    {'AttributeName': 'created_at', 'AttributeType': 'S'}
+                ],
+                GlobalSecondaryIndexes=[
+                    {
+                        'IndexName': 'user_id-created_at-index',
+                        'KeySchema': [
+                            {'AttributeName': 'user_id', 'KeyType': 'HASH'},
+                            {'AttributeName': 'created_at', 'KeyType': 'RANGE'}
+                        ],
+                        'Projection': {
+                            'ProjectionType': 'ALL'
+                        },
+                        'ProvisionedThroughput': {
+                            'ReadCapacityUnits': 5,
+                            'WriteCapacityUnits': 5
+                        }
+                    }
                 ],
                 ProvisionedThroughput={
                     'ReadCapacityUnits': 5,
@@ -77,11 +96,50 @@ def create_tables():
         else:
             logger.info("Notes table already exists")
 
+        # Create ProjectNotes mapping table if it doesn't exist
+        if 'ProjectNotes' not in existing_tables:
+            logger.info("Creating ProjectNotes mapping table...")
+            dynamodb.create_table(
+                TableName='ProjectNotes',
+                KeySchema=[
+                    {'AttributeName': 'project_id', 'KeyType': 'HASH'},
+                    {'AttributeName': 'created_at', 'KeyType': 'RANGE'}
+                ],
+                AttributeDefinitions=[
+                    {'AttributeName': 'project_id', 'AttributeType': 'S'},
+                    {'AttributeName': 'created_at', 'AttributeType': 'S'},
+                    {'AttributeName': 'note_id', 'AttributeType': 'S'}
+                ],
+                GlobalSecondaryIndexes=[
+                    {
+                        'IndexName': 'note_id-index',
+                        'KeySchema': [
+                            {'AttributeName': 'note_id', 'KeyType': 'HASH'}
+                        ],
+                        'Projection': {
+                            'ProjectionType': 'ALL'
+                        },
+                        'ProvisionedThroughput': {
+                            'ReadCapacityUnits': 5,
+                            'WriteCapacityUnits': 5
+                        }
+                    }
+                ],
+                ProvisionedThroughput={
+                    'ReadCapacityUnits': 5,
+                    'WriteCapacityUnits': 5
+                }
+            )
+            logger.info("ProjectNotes mapping table created successfully")
+        else:
+            logger.info("ProjectNotes mapping table already exists")
+
         # Wait for tables to be active if they were just created
-        if 'Projects' not in existing_tables or 'Notes' not in existing_tables:
+        if 'Projects' not in existing_tables or 'Notes' not in existing_tables or 'ProjectNotes' not in existing_tables:
             logger.info("Waiting for tables to be active...")
             dynamodb.Table('Projects').wait_until_exists()
             dynamodb.Table('Notes').wait_until_exists()
+            dynamodb.Table('ProjectNotes').wait_until_exists()
             logger.info("All tables are active")
             
     except Exception as e:
@@ -382,6 +440,7 @@ async def create_note(note: NoteCreate):
     """Create a new note and automatically map it to relevant projects."""
     notes_table = dynamodb.Table('Notes')
     projects_table = dynamodb.Table('Projects')
+    project_notes_table = dynamodb.Table('ProjectNotes')
     
     try:
         logger.info("Starting note creation process")
@@ -405,7 +464,7 @@ async def create_note(note: NoteCreate):
                 is_relevant = await check_project_relevance(note.content, project)
                 
                 if is_relevant:
-                    relevant_projects.append(project['id'])
+                    relevant_projects.append(project)
                     project_names.append(project['name'])
                     
                     # Update project summary
@@ -420,13 +479,12 @@ async def create_note(note: NoteCreate):
                         logger.info(f"Summary updated for project: {project['name']}")
                     except Exception as e:
                         logger.error(f"Error updating summary for project {project['name']}: {str(e)}")
-                        # Continue with note creation even if summary update fails
         
         # If no relevant projects found, add to Miscellaneous project
         if not relevant_projects:
             logger.info("No relevant projects found, adding to Miscellaneous")
             misc_project = await get_or_create_misc_project(note.user_id)
-            relevant_projects.append(misc_project['id'])
+            relevant_projects.append(misc_project)
             project_names.append('Miscellaneous')
             
             # Update Miscellaneous project summary
@@ -447,34 +505,245 @@ async def create_note(note: NoteCreate):
             'id': note_id,
             'created_at': timestamp,
             'content': note.content,
-            'linked_projects': relevant_projects,
-            'user_id': note.user_id
+            'user_id': note.user_id,
+            'projects': []  # Initialize empty projects list
         }
         
         # Save note
         logger.info("Saving note to database")
         notes_table.put_item(Item=note_item)
-        logger.info("Note saved successfully")
         
+        # Create project-note mappings and build projects list for response
+        project_refs = []
+        for project in relevant_projects:
+            project_notes_table.put_item(
+                Item={
+                    'project_id': project['id'],
+                    'created_at': timestamp,
+                    'note_id': note_id
+                }
+            )
+            project_refs.append({
+                'id': project['id'],
+                'name': project['name']
+            })
+        
+        # Add project details to response
+        note_item['projects'] = project_refs
+        
+        logger.info("Note and project mappings saved successfully")
         return note_item
     except Exception as e:
         logger.error(f"Error in note creation process: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.get("/notes", response_model=List[Note])
-async def list_notes(project_id: Optional[str] = None):
-    """Get all notes, optionally filtered by project."""
+def get_pagination_key(page: int, user_id: str) -> Optional[dict]:
+    """Helper function to get the pagination key for GSI queries."""
+    if page <= 1:
+        return None
+        
     notes_table = dynamodb.Table('Notes')
     try:
-        if project_id:
-            response = notes_table.scan(
-                FilterExpression='contains(linked_projects, :pid)',
-                ExpressionAttributeValues={':pid': project_id}
-            )
-        else:
-            response = notes_table.scan()
+        # Calculate how many items to skip
+        items_to_skip = (page - 1) * 10
         
-        return response.get('Items', [])
+        # Query the GSI to get the last evaluated key for the previous page
+        response = notes_table.query(
+            IndexName='user_id-created_at-index',
+            KeyConditionExpression='user_id = :uid',
+            ExpressionAttributeValues={':uid': user_id},
+            ScanIndexForward=False,
+            Limit=items_to_skip
+        )
+        
+        # If we have a LastEvaluatedKey and we've fetched enough items,
+        # return it for the next query
+        if response.get('LastEvaluatedKey') and len(response.get('Items', [])) >= items_to_skip:
+            return response['LastEvaluatedKey']
+        return None
+    except Exception as e:
+        logger.error(f"Error getting pagination key: {str(e)}")
+        return None
+
+def get_notes_by_project(table, project_notes_table, projects_table, project_id: str, page_size: int, exclusive_start_key: Optional[dict] = None) -> dict:
+    """
+    Query notes by project_id using the ProjectNotes mapping table.
+    Returns notes sorted by created_at in descending order with project details.
+    """
+    # First, query the ProjectNotes table to get note IDs for the project
+    query_params = {
+        'TableName': 'ProjectNotes',
+        'KeyConditionExpression': 'project_id = :pid',
+        'ExpressionAttributeValues': {':pid': project_id},
+        'ScanIndexForward': False,  # Sort in descending order
+        'Limit': page_size
+    }
+    
+    if exclusive_start_key:
+        query_params['ExclusiveStartKey'] = exclusive_start_key
+        
+    project_notes_response = project_notes_table.query(**query_params)
+    
+    # Get the note IDs from the mapping table results
+    note_ids = [item['note_id'] for item in project_notes_response.get('Items', [])]
+    
+    # If no notes found, return empty result
+    if not note_ids:
+        return {
+            'Items': [],
+            'LastEvaluatedKey': project_notes_response.get('LastEvaluatedKey')
+        }
+    
+    # Batch get the actual notes
+    notes = []
+    for i in range(0, len(note_ids), 25):  # Process in batches of 25 (DynamoDB limit)
+        batch = note_ids[i:i + 25]
+        response = dynamodb.batch_get_item(
+            RequestItems={
+                'Notes': {
+                    'Keys': [{'id': note_id} for note_id in batch]
+                }
+            }
+        )
+        notes.extend(response['Responses']['Notes'])
+    
+    # Sort notes by created_at in descending order
+    notes.sort(key=lambda x: x['created_at'], reverse=True)
+    
+    # Get project details for each note
+    for note in notes:
+        # Query ProjectNotes table for all projects linked to this note
+        project_mappings = project_notes_table.query(
+            IndexName='note_id-index',
+            KeyConditionExpression='note_id = :nid',
+            ExpressionAttributeValues={':nid': note['id']}
+        ).get('Items', [])
+        
+        # Get project details
+        project_ids = [mapping['project_id'] for mapping in project_mappings]
+        projects = []
+        for pid in project_ids:
+            project = projects_table.get_item(Key={'id': pid}).get('Item')
+            if project:
+                projects.append({
+                    'id': project['id'],
+                    'name': project['name']
+                })
+        note['projects'] = projects
+    
+    return {
+        'Items': notes,
+        'LastEvaluatedKey': project_notes_response.get('LastEvaluatedKey')
+    }
+
+def get_notes_by_user(table, project_notes_table, projects_table, user_id: str, page_size: int, exclusive_start_key: Optional[dict] = None) -> dict:
+    """
+    Query notes by user_id using the user_id-created_at-index GSI.
+    Returns notes sorted by created_at in descending order with project details.
+    """
+    query_params = {
+        'IndexName': 'user_id-created_at-index',
+        'KeyConditionExpression': 'user_id = :uid',
+        'ExpressionAttributeValues': {':uid': user_id},
+        'ScanIndexForward': False,  # Sort in descending order
+        'Limit': page_size
+    }
+    
+    if exclusive_start_key:
+        query_params['ExclusiveStartKey'] = exclusive_start_key
+        
+    response = table.query(**query_params)
+    notes = response.get('Items', [])
+    
+    # Get project details for each note
+    for note in notes:
+        # Query ProjectNotes table for all projects linked to this note
+        project_mappings = project_notes_table.query(
+            IndexName='note_id-index',
+            KeyConditionExpression='note_id = :nid',
+            ExpressionAttributeValues={':nid': note['id']}
+        ).get('Items', [])
+        
+        # Get project details
+        project_ids = [mapping['project_id'] for mapping in project_mappings]
+        projects = []
+        for pid in project_ids:
+            project = projects_table.get_item(Key={'id': pid}).get('Item')
+            if project:
+                projects.append({
+                    'id': project['id'],
+                    'name': project['name']
+                })
+        note['projects'] = projects
+    
+    return {
+        'Items': notes,
+        'LastEvaluatedKey': response.get('LastEvaluatedKey')
+    }
+
+@router.get("/notes", response_model=PaginatedNotes)
+async def list_notes(
+    project_id: Optional[str] = None,
+    user_id: Optional[str] = None,
+    page: int = Query(1, gt=0),
+    page_size: int = Query(10, gt=0, le=50),
+    exclusive_start_key: Optional[str] = None
+):
+    """
+    Get paginated notes, filtered by project or user, sorted by created_at desc.
+    Uses GSIs for efficient querying and pagination.
+    Either project_id or user_id must be provided.
+    """
+    if not project_id and not user_id:
+        raise HTTPException(
+            status_code=400,
+            detail="Either project_id or user_id must be provided"
+        )
+
+    notes_table = dynamodb.Table('Notes')
+    project_notes_table = dynamodb.Table('ProjectNotes')
+    projects_table = dynamodb.Table('Projects')
+    
+    try:
+        # Convert exclusive_start_key from string to dict if provided
+        start_key = None
+        if exclusive_start_key:
+            try:
+                start_key = json.loads(exclusive_start_key)
+            except json.JSONDecodeError:
+                raise HTTPException(status_code=400, detail="Invalid exclusive_start_key format")
+
+        # Fetch one extra item to determine if there are more pages
+        actual_limit = page_size + 1
+        
+        if project_id:
+            response = get_notes_by_project(notes_table, project_notes_table, projects_table, project_id, actual_limit, start_key)
+        else:  # user_id is present since we checked above
+            response = get_notes_by_user(notes_table, project_notes_table, projects_table, user_id, actual_limit, start_key)
+
+        # Get items and check if we have more
+        items = response.get('Items', [])
+        has_more = len(items) > page_size
+        
+        # Remove the extra item if we fetched one
+        if has_more:
+            items = items[:page_size]
+
+        # Convert DynamoDB items to Note models and ensure projects field exists
+        for item in items:
+            if 'projects' not in item:
+                item['projects'] = []
+            if 'linked_projects' in item:
+                del item['linked_projects']
+
+        return PaginatedNotes(
+            items=items,
+            page=page,
+            page_size=page_size,
+            has_more=has_more,
+            LastEvaluatedKey=response.get('LastEvaluatedKey')
+        )
+            
     except Exception as e:
         logger.error(f"Error listing notes: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -495,7 +764,7 @@ async def get_note(note_id: str):
 async def delete_project(project_id: str):
     """Delete a project and all its child projects recursively"""
     projects_table = dynamodb.Table('Projects')
-    notes_table = dynamodb.Table('Notes')
+    project_notes_table = dynamodb.Table('ProjectNotes')
     
     try:
         # Check if project exists
@@ -521,21 +790,28 @@ async def delete_project(project_id: str):
         
         logger.info(f"Deleting project {project_id} and {len(projects_to_delete) - 1} child projects")
         
-        # Delete all projects and update their linked notes
+        # Delete all projects and their note mappings
         for pid in projects_to_delete:
-            # Update notes to remove this project from linked_projects
-            notes = notes_table.scan(
-                FilterExpression='contains(linked_projects, :pid)',
-                ExpressionAttributeValues={':pid': pid}
-            ).get('Items', [])
-            
-            for note in notes:
-                updated_projects = [p for p in note['linked_projects'] if p != pid]
-                notes_table.update_item(
-                    Key={'id': note['id']},
-                    UpdateExpression='SET linked_projects = :projects',
-                    ExpressionAttributeValues={':projects': updated_projects}
+            # Delete all project-note mappings for this project
+            while True:
+                # Query for project-note mappings
+                mappings = project_notes_table.query(
+                    KeyConditionExpression='project_id = :pid',
+                    ExpressionAttributeValues={':pid': pid}
                 )
+                
+                if not mappings.get('Items'):
+                    break
+                    
+                # Delete mappings in batches
+                with project_notes_table.batch_writer() as batch:
+                    for mapping in mappings['Items']:
+                        batch.delete_item(
+                            Key={
+                                'project_id': mapping['project_id'],
+                                'created_at': mapping['created_at']
+                            }
+                        )
             
             # Delete the project
             projects_table.delete_item(Key={'id': pid})
