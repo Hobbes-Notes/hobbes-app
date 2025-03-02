@@ -493,7 +493,7 @@ async def get_note(note_id: str):
 
 @router.delete("/projects/{project_id}")
 async def delete_project(project_id: str):
-    """Delete a project and its associated notes"""
+    """Delete a project and all its child projects recursively"""
     projects_table = dynamodb.Table('Projects')
     notes_table = dynamodb.Table('Notes')
     
@@ -505,25 +505,42 @@ async def delete_project(project_id: str):
             
         project = response['Item']
         
-        # Delete all notes linked to this project
-        notes = notes_table.scan(
-            FilterExpression='contains(linked_projects, :pid)',
-            ExpressionAttributeValues={':pid': project_id}
-        ).get('Items', [])
+        # Get all projects to find children
+        all_projects = projects_table.scan().get('Items', [])
         
-        # Update notes to remove this project from linked_projects
-        for note in notes:
-            updated_projects = [p for p in note['linked_projects'] if p != project_id]
-            notes_table.update_item(
-                Key={'id': note['id']},
-                UpdateExpression='SET linked_projects = :projects',
-                ExpressionAttributeValues={':projects': updated_projects}
-            )
+        # Function to get all descendant project IDs recursively
+        def get_descendant_ids(parent_id):
+            children = [p for p in all_projects if p.get('parent_id') == parent_id]
+            descendant_ids = [parent_id]
+            for child in children:
+                descendant_ids.extend(get_descendant_ids(child['id']))
+            return descendant_ids
         
-        # Delete the project
-        projects_table.delete_item(Key={'id': project_id})
+        # Get all projects to be deleted (including descendants)
+        projects_to_delete = get_descendant_ids(project_id)
         
-        return {"message": "Project deleted successfully"}
+        logger.info(f"Deleting project {project_id} and {len(projects_to_delete) - 1} child projects")
+        
+        # Delete all projects and update their linked notes
+        for pid in projects_to_delete:
+            # Update notes to remove this project from linked_projects
+            notes = notes_table.scan(
+                FilterExpression='contains(linked_projects, :pid)',
+                ExpressionAttributeValues={':pid': pid}
+            ).get('Items', [])
+            
+            for note in notes:
+                updated_projects = [p for p in note['linked_projects'] if p != pid]
+                notes_table.update_item(
+                    Key={'id': note['id']},
+                    UpdateExpression='SET linked_projects = :projects',
+                    ExpressionAttributeValues={':projects': updated_projects}
+                )
+            
+            # Delete the project
+            projects_table.delete_item(Key={'id': pid})
+        
+        return {"message": f"Project and {len(projects_to_delete) - 1} child projects deleted successfully"}
     except Exception as e:
         logger.error(f"Error deleting project {project_id}: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))

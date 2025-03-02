@@ -16,6 +16,43 @@ code {
     monospace;
 }
 
+/* Prevent text selection during resize */
+.resize-handle {
+  user-select: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+}
+
+/* Add visual feedback for resize handle */
+.resize-handle::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: -2px;
+  width: 4px;
+  height: 100%;
+  background: transparent;
+  transition: background-color 0.2s;
+}
+
+.resize-handle:hover::after {
+  background: rgba(59, 130, 246, 0.5); /* Blue color with opacity */
+}
+
+/* Style for when resizing is active */
+.resizing .resize-handle::after {
+  background: rgba(59, 130, 246, 0.5);
+}
+
+/* Prevent text selection during resize */
+.resizing {
+  user-select: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+}
+
 @layer base {
   :root {
     --background: 0 0% 100%;
