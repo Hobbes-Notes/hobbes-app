@@ -42,7 +42,7 @@ const ProjectsPage = () => {
   }, [fetchProjects]);
 
   const handleNoteCreated = useCallback((newNote) => {
-    // Update projects list only if the note is linked to any projects
+    // Update projects list if the note is linked to any projects
     if (newNote.linked_projects?.length > 0) {
       fetchProjects();
     }
