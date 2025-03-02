@@ -5,7 +5,7 @@ import os
 from datetime import datetime
 import uuid
 from typing import List, Optional
-from api.models import Project, ProjectCreate, Note, NoteCreate
+from api.models import Project, ProjectCreate, Note, NoteCreate, ProjectUpdate
 import logging
 import time
 from dotenv import load_dotenv
@@ -456,6 +456,59 @@ async def delete_project(project_id: str):
     except Exception as e:
         logger.error(f"Error deleting project {project_id}: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
+
+@router.patch("/projects/{project_id}", response_model=Project)
+async def update_project(project_id: str, project_update: ProjectUpdate):
+    """Update a project's details"""
+    projects_table = dynamodb.Table('Projects')
+    try:
+        # Check if project exists
+        response = projects_table.get_item(Key={'id': project_id})
+        if 'Item' not in response:
+            raise HTTPException(status_code=404, detail="Project not found")
+
+        # Build update expression and attribute values
+        update_expr = "SET "
+        expr_attr_values = {}
+        expr_attr_names = {}
+        
+        if project_update.name is not None:
+            update_expr += "#name = :name, "
+            expr_attr_values[':name'] = project_update.name
+            expr_attr_names['#name'] = 'name'
+            
+        if project_update.description is not None:
+            update_expr += "description = :description, "
+            expr_attr_values[':description'] = project_update.description
+            
+        if project_update.summary is not None:
+            update_expr += "summary = :summary, "
+            expr_attr_values[':summary'] = project_update.summary
+
+        # Remove trailing comma and space
+        update_expr = update_expr.rstrip(", ")
+
+        # Only update if there are changes
+        if expr_attr_values:
+            update_params = {
+                'Key': {'id': project_id},
+                'UpdateExpression': update_expr,
+                'ExpressionAttributeValues': expr_attr_values,
+                'ReturnValues': 'ALL_NEW'
+            }
+            
+            if expr_attr_names:
+                update_params['ExpressionAttributeNames'] = expr_attr_names
+
+            response = projects_table.update_item(**update_params)
+            return response['Attributes']
+        
+        # If no changes, return existing project
+        return response['Item']
+    except Exception as e:
+        error_msg = f"Error updating project {project_id}: {str(e)}"
+        logger.error(error_msg, exc_info=True)
+        raise HTTPException(status_code=500, detail=error_msg)
 
 # Recreate tables on startup
 @router.on_event("startup")

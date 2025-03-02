@@ -2,38 +2,35 @@ import React, { useState } from 'react';
 import { Link, useNavigate, useLocation, useParams } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { useApiService } from '../services/api';
-import { PlusIcon, TrashIcon } from 'lucide-react';
+import { PlusIcon, TrashIcon, PencilIcon } from 'lucide-react';
+import ProjectFormModal from './ProjectFormModal';
 
 const Sidebar = ({ projects, onProjectCreated, onProjectDeleted }) => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const { projectId: currentProjectId } = useParams();
-  const { createProject, deleteProject } = useApiService();
-  const [isCreating, setIsCreating] = useState(false);
-  const [newProject, setNewProject] = useState({ name: '', description: '' });
+  const { createProject, updateProject, deleteProject } = useApiService();
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState(null);
-  const [showNewProjectForm, setShowNewProjectForm] = useState(false);
+  const [showProjectForm, setShowProjectForm] = useState(false);
   const [projectToDelete, setProjectToDelete] = useState(null);
+  const [editingProject, setEditingProject] = useState(null);
 
   const handleLogout = async () => {
     await logout();
     navigate('/login');
   };
 
-  const handleCreateProject = async (e) => {
-    e.preventDefault();
-    if (!newProject.name.trim() || isCreating) return;
-
+  const handleCreateProject = async (projectData) => {
     try {
-      setIsCreating(true);
+      setIsSubmitting(true);
       setError(null);
       const response = await createProject({
-        ...newProject,
+        ...projectData,
         user_id: user.id
       });
-      setNewProject({ name: '', description: '' });
-      setShowNewProjectForm(false);
+      setShowProjectForm(false);
       if (onProjectCreated) {
         await onProjectCreated();
       }
@@ -42,7 +39,30 @@ const Sidebar = ({ projects, onProjectCreated, onProjectDeleted }) => {
       console.error('Error creating project:', error);
       setError('Failed to create project. Please try again.');
     } finally {
-      setIsCreating(false);
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleEditProject = async (projectData) => {
+    if (!editingProject) return;
+    
+    try {
+      setIsSubmitting(true);
+      setError(null);
+      await updateProject(editingProject.id, {
+        name: projectData.name,
+        description: projectData.description,
+        user_id: user.id
+      });
+      setEditingProject(null);
+      if (onProjectCreated) {
+        await onProjectCreated();
+      }
+    } catch (error) {
+      console.error('Error updating project:', error);
+      setError('Failed to update project. Please try again.');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -61,8 +81,26 @@ const Sidebar = ({ projects, onProjectCreated, onProjectDeleted }) => {
     }
   };
 
+  const handleCloseForm = () => {
+    setShowProjectForm(false);
+    setEditingProject(null);
+    setError(null);
+  };
+
   return (
     <div className="h-full flex flex-col">
+      {/* Project Form Modal */}
+      <ProjectFormModal
+        isOpen={showProjectForm || editingProject !== null}
+        onClose={handleCloseForm}
+        onSubmit={editingProject ? handleEditProject : handleCreateProject}
+        initialData={editingProject || { name: '', description: '' }}
+        title={editingProject ? 'Edit Project' : 'New Project'}
+        submitLabel={editingProject ? 'Save' : 'Create'}
+        isSubmitting={isSubmitting}
+        error={error}
+      />
+
       {/* Delete Confirmation Modal */}
       {projectToDelete && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
@@ -97,66 +135,16 @@ const Sidebar = ({ projects, onProjectCreated, onProjectDeleted }) => {
         <div className="p-3">
           <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider">Projects</h2>
           
-          {/* New Project Form */}
+          {/* New Project Button */}
           <div className="mt-2">
             <button
-              onClick={() => setShowNewProjectForm(true)}
+              onClick={() => setShowProjectForm(true)}
               className="w-full flex items-center justify-center px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
             >
               <PlusIcon className="w-4 h-4 mr-2" />
               New Project
             </button>
           </div>
-
-          {error && (
-            <div className="mt-2 p-3 text-sm text-red-700 bg-red-100 rounded-lg">
-              {error}
-            </div>
-          )}
-
-          {showNewProjectForm && (
-            <form onSubmit={handleCreateProject} className="mt-3 space-y-3">
-              <input
-                type="text"
-                value={newProject.name}
-                onChange={(e) => setNewProject({ ...newProject, name: e.target.value })}
-                placeholder="Project name"
-                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                required
-              />
-              <textarea
-                value={newProject.description}
-                onChange={(e) => setNewProject({ ...newProject, description: e.target.value })}
-                placeholder="Description (optional)"
-                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
-                rows="3"
-              />
-              <div className="flex space-x-2">
-                <button
-                  type="submit"
-                  disabled={!newProject.name.trim() || isCreating}
-                  className={`flex-1 px-3 py-2 text-sm font-medium text-white rounded-md ${
-                    !newProject.name.trim() || isCreating
-                      ? 'bg-gray-300 cursor-not-allowed'
-                      : 'bg-blue-500 hover:bg-blue-600'
-                  }`}
-                >
-                  {isCreating ? 'Creating...' : 'Create'}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowNewProjectForm(false);
-                    setNewProject({ name: '', description: '' });
-                    setError(null);
-                  }}
-                  className="px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
-                >
-                  Cancel
-                </button>
-              </div>
-            </form>
-          )}
 
           {/* Projects List */}
           <div className="mt-3 space-y-0.5">
@@ -175,13 +163,28 @@ const Sidebar = ({ projects, onProjectCreated, onProjectDeleted }) => {
                 >
                   <span className="font-medium">{project.name}</span>
                 </button>
-                <button
-                  onClick={() => setProjectToDelete(project.id)}
-                  className="opacity-0 group-hover:opacity-100 p-1 text-gray-400 hover:text-red-500 transition-opacity"
-                  title="Delete project"
-                >
-                  <TrashIcon className="w-4 h-4" />
-                </button>
+                <div className="flex items-center space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setEditingProject(project);
+                    }}
+                    className="p-1 text-gray-400 hover:text-blue-500 transition-colors"
+                    title="Edit project"
+                  >
+                    <PencilIcon className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setProjectToDelete(project.id);
+                    }}
+                    className="p-1 text-gray-400 hover:text-red-500 transition-colors"
+                    title="Delete project"
+                  >
+                    <TrashIcon className="w-4 h-4" />
+                  </button>
+                </div>
               </div>
             ))}
           </div>

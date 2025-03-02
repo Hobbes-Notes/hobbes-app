@@ -106,7 +106,7 @@ export const useApiService = () => {
     }, [api]),
 
     updateProject: useCallback(async (id, data) => {
-      return api.put(`/projects/${id}`, data);
+      return api.patch(`/projects/${id}`, data);
     }, [api]),
 
     deleteProject: useCallback(async (id) => {
