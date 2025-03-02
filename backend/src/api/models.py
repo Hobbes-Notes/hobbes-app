@@ -33,6 +33,7 @@ class ProjectCreate(BaseModel):
     name: str
     description: Optional[str] = None
     user_id: str
+    parent_id: Optional[str] = None  # ID of the parent project
 
 class Project(BaseModel):
     id: str
@@ -41,6 +42,8 @@ class Project(BaseModel):
     summary: str = ""
     created_at: str
     user_id: str  # Owner of the project
+    parent_id: Optional[str] = None  # ID of the parent project
+    level: int = 1  # Level in the hierarchy (1 to 3)
 
 class NoteCreate(BaseModel):
     content: str

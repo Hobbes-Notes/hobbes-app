@@ -93,8 +93,11 @@ export const useApiService = () => {
 
   return {
     // Projects
-    getProjects: useCallback(async () => {
-      return api.get('/projects');
+    getProjects: useCallback(async (user_id) => {
+      if (!user_id) {
+        throw new Error('User ID is required');
+      }
+      return api.get(`/projects?user_id=${user_id}`);
     }, [api]),
 
     createProject: useCallback(async (projectData) => {

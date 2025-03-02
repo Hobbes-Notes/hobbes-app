@@ -30,19 +30,16 @@ const ProfilePage = () => {
         setLoading(true);
         setError(null);
         const [projectsResponse, notesResponse] = await Promise.all([
-          getProjects(),
+          getProjects(user.id),
           getAllNotes()
         ]);
 
         // Filter for user's data
-        const userProjects = projectsResponse.data.filter(
-          project => project.user_id === user.id
-        );
         const userNotes = notesResponse.data.filter(
           note => note.user_id === user.id
         );
 
-        setProjects(userProjects);
+        setProjects(projectsResponse.data);
         setNotes(userNotes);
       } catch (err) {
         console.error('Error fetching user data:', err);

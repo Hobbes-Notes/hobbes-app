@@ -19,12 +19,8 @@ const ProjectsPage = () => {
     try {
       setLoading(true);
       setError(null);
-      const response = await getProjects();
-      // Filter projects for the current user
-      const userProjects = response.data.filter(
-        (project) => project.user_id === user.id
-      );
-      setProjects(userProjects);
+      const response = await getProjects(user.id);
+      setProjects(response.data);
     } catch (error) {
       console.error('Error fetching projects:', error);
       setError('Failed to load projects. Please try again.');

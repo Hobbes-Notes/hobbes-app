@@ -9,6 +9,8 @@ from api.models import Project, ProjectCreate, Note, NoteCreate, ProjectUpdate
 import logging
 import time
 from dotenv import load_dotenv
+from fastapi import Depends
+from boto3.dynamodb.conditions import Key
 
 # Load environment variables
 load_dotenv()
@@ -266,14 +268,26 @@ async def get_project(project_id: str):
         raise HTTPException(status_code=500, detail=error_msg)
 
 @router.get("/projects", response_model=List[Project])
-async def list_projects():
+async def get_projects(user_id: str):
     projects_table = dynamodb.Table('Projects')
     try:
-        response = projects_table.scan()
-        return response.get('Items', [])
+        # Get all projects for the user
+        response = projects_table.scan(
+            FilterExpression='user_id = :uid',
+            ExpressionAttributeValues={':uid': user_id}
+        )
+
+        # Convert DynamoDB items to Project models
+        projects = [Project(**item) for item in response.get('Items', [])]
+
+        # Sort projects by level and name to ensure consistent ordering
+        projects.sort(key=lambda x: (x.level or 1, x.name))
+
+        return projects
+
     except Exception as e:
-        logger.error(f"Error listing projects: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Error getting projects: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to get projects")
 
 @router.post("/projects", response_model=Project)
 async def create_project(project: ProjectCreate):
@@ -283,15 +297,70 @@ async def create_project(project: ProjectCreate):
     
     try:
         logger.info(f"Creating project: {project.name} for user: {project.user_id}")
-        logger.info(f"Project details - ID: {project_id}, Description: {project.description}")
+        logger.info(f"Project details - ID: {project_id}, Description: {project.description}, Parent ID: {project.parent_id}")
+        
+        # Validate project name length
+        if len(project.name.strip()) < 3:
+            raise HTTPException(
+                status_code=400, 
+                detail="Project name must be at least 3 characters long (current length: {})".format(
+                    len(project.name.strip())
+                )
+            )
+            
+        # Validate description length if provided
+        if project.description and len(project.description.strip()) < 5:
+            raise HTTPException(
+                status_code=400, 
+                detail="Project description must be at least 5 characters long (current length: {})".format(
+                    len(project.description.strip())
+                )
+            )
+
+        # Get all existing projects for the user
+        existing_projects = projects_table.scan(
+            FilterExpression='user_id = :uid',
+            ExpressionAttributeValues={':uid': project.user_id}
+        ).get('Items', [])
+
+        # Filter projects with same parent
+        same_level_projects = [p for p in existing_projects 
+                             if p.get('parent_id') == project.parent_id]
+        
+        # Check for duplicate names at the same level
+        if any(p['name'].lower() == project.name.strip().lower() 
+               for p in same_level_projects):
+            raise HTTPException(
+                status_code=400, 
+                detail="A project with the name '{}' already exists at this level".format(project.name)
+            )
+
+        # Determine project level
+        level = 1
+        if project.parent_id:
+            # Find parent project
+            parent = next((p for p in existing_projects if p['id'] == project.parent_id), None)
+            if not parent:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Parent project not found"
+                )
+            level = parent.get('level', 1) + 1
+            if level > 3:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Maximum nesting level (3) exceeded"
+                )
         
         item = {
             'id': project_id,
-            'name': project.name,
-            'description': project.description,
+            'name': project.name.strip(),
+            'description': project.description.strip() if project.description else '',
             'summary': '',
             'created_at': timestamp,
-            'user_id': project.user_id
+            'user_id': project.user_id,
+            'parent_id': project.parent_id,
+            'level': level
         }
         
         logger.info(f"Project data to be stored: {item}")
@@ -299,6 +368,8 @@ async def create_project(project: ProjectCreate):
         logger.info(f"Successfully created project: {project_id}")
         
         return item
+    except HTTPException:
+        raise
     except Exception as e:
         error_msg = f"Error creating project: {str(e)}"
         logger.error(error_msg, exc_info=True)
