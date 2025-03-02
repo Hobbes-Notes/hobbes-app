@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Outlet, useParams } from 'react-router-dom';
-import { getProjects } from '../services/api';
+import { useApiService } from '../services/api';
 import Sidebar from './Sidebar';
 import GlobalNoteInput from './GlobalNoteInput';
 import { useAuth } from '../hooks/useAuth';
@@ -8,11 +8,17 @@ import { useAuth } from '../hooks/useAuth';
 const ProjectsPage = () => {
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const { user } = useAuth();
   const { projectId } = useParams();
+  const { getProjects } = useApiService();
 
-  const fetchProjects = async () => {
+  const fetchProjects = useCallback(async () => {
+    if (!user) return; // Don't fetch if there's no user
+
     try {
+      setLoading(true);
+      setError(null);
       const response = await getProjects();
       // Filter projects for the current user
       const userProjects = response.data.filter(
@@ -21,23 +27,36 @@ const ProjectsPage = () => {
       setProjects(userProjects);
     } catch (error) {
       console.error('Error fetching projects:', error);
+      setError('Failed to load projects. Please try again.');
     } finally {
       setLoading(false);
     }
-  };
+  }, [getProjects, user]);
 
   useEffect(() => {
-    if (user) {
+    fetchProjects();
+  }, [fetchProjects]);
+
+  const handleProjectUpdated = useCallback(async () => {
+    await fetchProjects();
+  }, [fetchProjects]);
+
+  const handleNoteCreated = useCallback((newNote) => {
+    // Update projects list only if the note is linked to any projects
+    if (newNote.linked_projects?.length > 0) {
       fetchProjects();
     }
-  }, [user]);
+  }, [fetchProjects]);
 
-  const handleProjectUpdated = async () => {
-    // Refresh the projects list
-    await fetchProjects();
-  };
+  if (error) {
+    return (
+      <div className="p-4 text-red-600 bg-red-100 rounded-lg">
+        {error}
+      </div>
+    );
+  }
 
-  if (loading) {
+  if (loading && projects.length === 0) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
@@ -60,12 +79,12 @@ const ProjectsPage = () => {
             Select a project or create a new one
           </div>
         )}
-        <Outlet />
+        <Outlet context={{ onNoteCreated: handleNoteCreated }} />
       </main>
       <div className="fixed bottom-0 right-0 w-[calc(100%-16rem)] bg-white border-t border-gray-200 shadow-lg">
         <GlobalNoteInput 
           projects={projects} 
-          onNoteCreated={handleProjectUpdated}
+          onNoteCreated={handleNoteCreated}
         />
       </div>
     </div>

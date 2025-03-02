@@ -1,5 +1,5 @@
 import React from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { GoogleOAuthProvider } from '@react-oauth/google';
 import { AuthProvider } from './hooks/useAuth';
 import { ProtectedRoute } from './components/ProtectedRoute';
@@ -8,12 +8,6 @@ import ProfilePage from './components/ProfilePage';
 import ProjectsPage from './components/ProjectsPage';
 import NotesPage from './components/NotesPage';
 import ProjectView from './components/ProjectView';
-import { useAuth } from './hooks/useAuth';
-
-const PrivateRoute = ({ children }) => {
-  const { user } = useAuth();
-  return user ? children : <Navigate to="/login" />;
-};
 
 function App() {
   const clientId = process.env.REACT_APP_GOOGLE_CLIENT_ID;
@@ -30,7 +24,14 @@ function App() {
           <div className="min-h-screen bg-gray-100">
             <Routes>
               <Route path="/login" element={<LoginPage />} />
-              <Route path="/" element={<PrivateRoute><ProjectsPage /></PrivateRoute>} />
+              <Route
+                path="/"
+                element={
+                  <ProtectedRoute>
+                    <ProjectsPage />
+                  </ProtectedRoute>
+                }
+              />
               <Route
                 path="/projects"
                 element={

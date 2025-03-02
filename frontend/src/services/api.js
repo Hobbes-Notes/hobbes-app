@@ -1,201 +1,133 @@
-import axios from 'axios';
+import { useCallback } from 'react';
+import { useAuth } from '../hooks/useAuth';
 
-// Use environment variable for API URL
-const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8888';
+// Utility for generating correlation IDs
+const generateCorrelationId = () => {
+  return `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+};
 
-// Debug API configuration
-console.log('API Configuration:', {
-  baseURL: API_URL,
-  environment: process.env.NODE_ENV
-});
+// Error handling utilities
+const formatErrorDetails = (error) => {
+  return {
+    code: error.response?.status,
+    data: error.response?.data,
+    url: error.config?.url,
+    method: error.config?.method,
+    timestamp: new Date().toISOString(),
+    correlationId: error.config?.correlationId,
+    requestData: error.config?.data,
+    stack: error.stack
+  };
+};
 
-const api = axios.create({
-  baseURL: API_URL,
-  withCredentials: true,
-  headers: {
-    'Content-Type': 'application/json',
-  },
-});
+const logError = (context, error) => {
+  if (process.env.NODE_ENV === 'development') {
+    console.group(`🔴 API Error: ${context}`);
+    console.error('Error Details:', formatErrorDetails(error));
+    console.error('Stack:', error.stack);
+    console.groupEnd();
+  }
+};
 
-// Add request interceptor for authentication
-api.interceptors.request.use(
-  (config) => {
-    const token = localStorage.getItem('token');
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
+const logRequest = (config) => {
+  if (process.env.NODE_ENV === 'development') {
+    console.group(`🔵 API Request: ${config.method?.toUpperCase()} ${config.url}`);
+    console.log('Correlation ID:', config.correlationId);
+    console.log('Timestamp:', new Date().toISOString());
+    console.log('Headers:', config.headers);
+    if (config.data) console.log('Data:', config.data);
+    if (config.params) console.log('Params:', config.params);
+    console.groupEnd();
+  }
+};
+
+const logResponse = (response) => {
+  if (process.env.NODE_ENV === 'development') {
+    const duration = Date.now() - response.config.requestTime;
+    console.group(`🟢 API Response: ${response.config.method?.toUpperCase()} ${response.config.url}`);
+    console.log('Correlation ID:', response.config.correlationId);
+    console.log('Status:', response.status);
+    console.log('Duration:', `${duration}ms`);
+    console.log('Data:', response.data);
+    console.groupEnd();
+  }
+};
+
+// API Hook for internal use
+export const useApi = () => {
+  const { getApi } = useAuth();
+  const api = getApi();
+
+  // Request interceptor with correlation ID and timing
+  api.interceptors.request.use(
+    (config) => {
+      config.correlationId = generateCorrelationId();
+      config.requestTime = Date.now();
+      logRequest(config);
+      return config;
+    },
+    (error) => {
+      logError('Request Interceptor', error);
+      return Promise.reject(error);
     }
-    return config;
-  },
-  (error) => {
-    console.error('Request interceptor error:', error);
-    return Promise.reject(error);
-  }
-);
+  );
 
-// Add response interceptor for handling auth errors
-api.interceptors.response.use(
-  (response) => {
-    console.log('API Response:', {
-      url: response.config.url,
-      status: response.status,
-      data: response.data
-    });
-    return response;
-  },
-  async (error) => {
-    console.error('API Error:', {
-      url: error.config?.url,
-      status: error.response?.status,
-      data: error.response?.data
-    });
-
-    if (error.response?.status === 401) {
-      localStorage.removeItem('token');
-      window.location.href = '/login';
+  // Response interceptor with timing and error handling
+  api.interceptors.response.use(
+    (response) => {
+      logResponse(response);
+      return response;
+    },
+    (error) => {
+      logError('Response Interceptor', error);
+      return Promise.reject(error);
     }
-    return Promise.reject(error);
-  }
-);
+  );
 
-// Add request interceptor for debugging
-api.interceptors.request.use(request => {
-  console.log('API Request:', {
-    method: request.method,
-    url: request.url,
-    baseURL: request.baseURL,
-    headers: request.headers,
-    params: request.params,
-    data: request.data
-  });
-  const token = localStorage.getItem('token');
-  if (token) {
-    request.headers.Authorization = `Bearer ${token}`;
-  }
-  return request;
-});
-
-// Add response interceptor for debugging
-api.interceptors.response.use(
-  response => {
-    console.log('API Response:', {
-      status: response.status,
-      statusText: response.statusText,
-      data: response.data,
-      headers: response.headers
-    });
-    return response;
-  },
-  error => {
-    console.error('API Error:', {
-      message: error.message,
-      status: error.response?.status,
-      statusText: error.response?.statusText,
-      data: error.response?.data,
-      config: error.config
-    });
-    return Promise.reject(error);
-  }
-);
-
-// Project endpoints
-export const getProjects = () => {
-  return api.get('/projects');
+  return api;
 };
 
-export const createProject = (projectData) => {
-  return api.post('/projects', projectData);
-};
+// Export individual API functions that use the hook internally
+export const useApiService = () => {
+  const api = useApi();
 
-export const getProject = (id) => api.get(`/projects/${id}`);
+  return {
+    // Projects
+    getProjects: useCallback(async () => {
+      return api.get('/projects');
+    }, [api]),
 
-export const updateProject = async (id, data) => {
-  return await api.put(`/projects/${id}`, data);
-};
+    createProject: useCallback(async (projectData) => {
+      return api.post('/projects', projectData);
+    }, [api]),
 
-export const deleteProject = async (id) => {
-  return await api.delete(`/projects/${id}`);
-};
+    getProject: useCallback(async (id) => {
+      return api.get(`/projects/${id}`);
+    }, [api]),
 
-// Note endpoints
-export const getNotes = (projectId) => {
-  return api.get(`/notes?project_id=${projectId}`);
-};
+    updateProject: useCallback(async (id, data) => {
+      return api.put(`/projects/${id}`, data);
+    }, [api]),
 
-export const getAllNotes = async () => {
-  console.log('getAllNotes called');
-  try {
-    const response = await api.get('/notes');
-    console.log('getAllNotes response:', response);
-    return response;
-  } catch (error) {
-    console.error('getAllNotes error:', {
-      message: error.message,
-      response: error.response,
-      request: error.request
-    });
-    throw error;
-  }
-};
+    deleteProject: useCallback(async (id) => {
+      return api.delete(`/projects/${id}`);
+    }, [api]),
 
-export const getNote = (id) => api.get(`/notes/${id}`);
+    // Notes
+    getNotes: useCallback(async (projectId) => {
+      return api.get(`/notes${projectId ? `?project_id=${projectId}` : ''}`);
+    }, [api]),
 
-export const createNote = (content, user_id) => {
-  return api.post('/notes', { content, user_id });
-};
+    getAllNotes: useCallback(async () => {
+      return api.get('/notes');
+    }, [api]),
 
-export const updateNote = async (projectId, noteId, data) => {
-  return await api.put(`/projects/${projectId}/notes/${noteId}`, data);
-};
+    getNote: useCallback(async (id) => {
+      return api.get(`/notes/${id}`);
+    }, [api]),
 
-export const deleteNote = async (projectId, noteId) => {
-  return await api.delete(`/projects/${projectId}/notes/${noteId}`);
-};
-
-export const loginWithGoogle = async (token) => {
-  console.log('Sending login request with token:', token);
-  try {
-    const response = await api.post('/auth/google', { token });
-    console.log('Login response:', response.data);
-    return response;
-  } catch (error) {
-    console.error('Login error:', error.response?.data || error.message);
-    throw error;
-  }
-};
-
-export const logoutUser = async () => {
-  return await api.post('/auth/logout');
-};
-
-export const getUserActivity = async () => {
-  try {
-    console.log('Fetching user activities...');
-    const token = localStorage.getItem('token');
-    console.log('Auth token present:', !!token);
-    
-    const response = await api.get('/auth/activity');
-    console.log('Activity API Response:', {
-      status: response.status,
-      headers: response.headers,
-      data: response.data
-    });
-
-    // Return the activities array from the response data
-    if (response.data?.status === 'success' && Array.isArray(response.data.data)) {
-      return response.data.data;
-    } else {
-      console.warn('Invalid activity response format:', response.data);
-      return [];
-    }
-  } catch (error) {
-    console.error('Error fetching activities:', {
-      message: error.message,
-      status: error.response?.status,
-      data: error.response?.data,
-      headers: error.response?.headers
-    });
-    throw error;
-  }
-};
-
-export default api; 
+    createNote: useCallback(async (content, user_id) => {
+      return api.post('/notes', { content, user_id });
+    }, [api])
+  };
+}; 

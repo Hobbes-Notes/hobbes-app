@@ -1,6 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../hooks/useAuth';
-import { getAllNotes, getProjects } from '../services/api';
+import { useApiService } from '../services/api';
 import { useNavigate } from 'react-router-dom';
 
 const NoteIcon = () => (
@@ -17,42 +17,60 @@ const NoteIcon = () => (
 
 const ProfilePage = () => {
   const { user } = useAuth();
+  const [projects, setProjects] = useState([]);
   const [notes, setNotes] = useState([]);
-  const [projects, setProjects] = useState({});
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const { getProjects, getAllNotes } = useApiService();
   const navigate = useNavigate();
 
   useEffect(() => {
-    const fetchData = async () => {
-      console.log('Starting data fetch...');
+    const fetchUserData = async () => {
       try {
-        // Fetch all projects first
-        const projectsResponse = await getProjects();
-        const projectsMap = {};
-        projectsResponse.data.forEach(project => {
-          projectsMap[project.id] = project;
-        });
-        setProjects(projectsMap);
+        setLoading(true);
+        setError(null);
+        const [projectsResponse, notesResponse] = await Promise.all([
+          getProjects(),
+          getAllNotes()
+        ]);
 
-        // Then fetch all notes
-        const notesResponse = await getAllNotes();
-        console.log('Notes response:', notesResponse);
-        setNotes(notesResponse.data);
-      } catch (error) {
-        console.error('Error fetching data:', error);
-        setNotes([]);
+        // Filter for user's data
+        const userProjects = projectsResponse.data.filter(
+          project => project.user_id === user.id
+        );
+        const userNotes = notesResponse.data.filter(
+          note => note.user_id === user.id
+        );
+
+        setProjects(userProjects);
+        setNotes(userNotes);
+      } catch (err) {
+        console.error('Error fetching user data:', err);
+        setError('Failed to load user data');
       } finally {
         setLoading(false);
       }
     };
 
     if (user) {
-      fetchData();
+      fetchUserData();
     }
-  }, [user]);
+  }, [user, getProjects, getAllNotes]);
 
-  if (!user) {
-    return null;
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-full">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="p-4 text-red-600 bg-red-100 rounded-lg">
+        {error}
+      </div>
+    );
   }
 
   return (
@@ -150,7 +168,7 @@ const ProfilePage = () => {
                             key={projectId}
                             className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800"
                           >
-                            {projects[projectId]?.name || 'Unknown Project'}
+                            {projects.find(project => project.id === projectId)?.name || 'Unknown Project'}
                           </span>
                         ))}
                       </div>

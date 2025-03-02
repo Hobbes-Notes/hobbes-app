@@ -1,9 +1,17 @@
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
+import { useEffect } from 'react';
 
 export const ProtectedRoute = ({ children }) => {
-  const { user, loading } = useAuth();
+  const { user, loading, error } = useAuth();
   const location = useLocation();
+
+  // If there's an auth error, redirect to login
+  useEffect(() => {
+    if (error) {
+      console.error('Auth error:', error);
+    }
+  }, [error]);
 
   if (loading) {
     return (
