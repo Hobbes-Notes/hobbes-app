@@ -9,23 +9,63 @@ const ProjectFormModal = ({
   title = 'New Project',
   submitLabel = 'Create',
   isSubmitting = false,
-  error = null
+  error = null,
+  projects = [],
+  editingProjectId = null
 }) => {
   const [formData, setFormData] = useState(initialData);
+  const [validationErrors, setValidationErrors] = useState({});
 
   // Reset form when modal opens with new data
   useEffect(() => {
     if (isOpen) {
       setFormData(initialData);
+      setValidationErrors({});
     }
   }, [isOpen, initialData]);
 
+  const validateForm = () => {
+    const errors = {};
+    
+    // Validate name
+    if (!formData.name || formData.name.trim().length < 3) {
+      errors.name = `Project name must be at least 3 characters long (current length: ${formData.name ? formData.name.trim().length : 0})`;
+    } else {
+      // Check for duplicate project names (case insensitive)
+      const normalizedName = formData.name.trim().toLowerCase();
+      const projectExists = projects.some(project => 
+        project.id !== editingProjectId &&
+        project.name.toLowerCase() === normalizedName
+      );
+      
+      if (projectExists) {
+        errors.name = `A project with the name '${formData.name.trim()}' already exists`;
+      }
+    }
+    
+    // Validate description if provided
+    if (formData.description && formData.description.trim().length < 5) {
+      errors.description = `Project description must be at least 5 characters long (current length: ${formData.description.trim().length})`;
+    }
+    
+    setValidationErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
   const handleSubmit = (e) => {
     e.preventDefault();
-    onSubmit(formData);
+    if (validateForm()) {
+      onSubmit(formData);
+    }
   };
 
   if (!isOpen) return null;
+
+  // Combine all errors into an array
+  const allErrors = [
+    ...(error ? [error] : []),
+    ...Object.values(validationErrors)
+  ];
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
@@ -41,9 +81,13 @@ const ProjectFormModal = ({
         </div>
         
         <form onSubmit={handleSubmit} className="space-y-4">
-          {error && (
-            <div className="p-3 text-sm text-red-700 bg-red-100 rounded-lg">
-              {error}
+          {allErrors.length > 0 && (
+            <div className="space-y-2">
+              {allErrors.map((err, index) => (
+                <div key={index} className="p-3 text-sm text-red-700 bg-red-100 rounded-lg">
+                  {err}
+                </div>
+              ))}
             </div>
           )}
           
@@ -55,10 +99,18 @@ const ProjectFormModal = ({
               type="text"
               id="name"
               value={formData.name}
-              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              onChange={(e) => {
+                setFormData({ ...formData, name: e.target.value });
+                if (validationErrors.name) {
+                  setValidationErrors({ ...validationErrors, name: null });
+                }
+              }}
+              className={`w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                validationErrors.name ? 'border-red-500' : 'border-gray-300'
+              }`}
               placeholder="Enter project name"
               required
+              minLength={3}
             />
           </div>
           
@@ -69,29 +121,33 @@ const ProjectFormModal = ({
             <textarea
               id="description"
               value={formData.description}
-              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+              onChange={(e) => {
+                setFormData({ ...formData, description: e.target.value });
+                if (validationErrors.description) {
+                  setValidationErrors({ ...validationErrors, description: null });
+                }
+              }}
+              className={`w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none ${
+                validationErrors.description ? 'border-red-500' : 'border-gray-300'
+              }`}
               placeholder="Enter project description"
               rows="3"
             />
           </div>
-
-          <div className="flex justify-end space-x-3 pt-2">
+          
+          <div className="flex justify-end mt-6">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+              className="mr-3 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded-md transition-colors"
             >
               Cancel
             </button>
             <button
               type="submit"
-              disabled={!formData.name.trim() || isSubmitting}
-              className={`px-4 py-2 text-sm font-medium text-white rounded-md ${
-                !formData.name.trim() || isSubmitting
-                  ? 'bg-gray-300 cursor-not-allowed'
-                  : 'bg-blue-500 hover:bg-blue-600'
-              }`}
+              disabled={isSubmitting}
+              className={`px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md transition-colors
+                ${isSubmitting ? 'opacity-50 cursor-not-allowed' : 'hover:bg-blue-700'}`}
             >
               {isSubmitting ? 'Saving...' : submitLabel}
             </button>

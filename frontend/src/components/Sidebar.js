@@ -37,7 +37,9 @@ const Sidebar = ({ projects, onProjectCreated, onProjectDeleted }) => {
       navigate(`/projects/${response.data.id}`);
     } catch (error) {
       console.error('Error creating project:', error);
-      setError('Failed to create project. Please try again.');
+      // Extract error message from the response if available
+      const errorMessage = error.response?.data?.detail || 'Failed to create project. Please try again.';
+      setError(errorMessage);
     } finally {
       setIsSubmitting(false);
     }
@@ -99,6 +101,8 @@ const Sidebar = ({ projects, onProjectCreated, onProjectDeleted }) => {
         submitLabel={editingProject ? 'Save' : 'Create'}
         isSubmitting={isSubmitting}
         error={error}
+        projects={projects}
+        editingProjectId={editingProject?.id}
       />
 
       {/* Delete Confirmation Modal */}
