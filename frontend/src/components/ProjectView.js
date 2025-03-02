@@ -1,60 +1,138 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { useParams } from 'react-router-dom';
-import { getProject, getNotes } from '../services/api';
-import { useAuth } from '../hooks/useAuth';
+import { useParams, useOutletContext } from 'react-router-dom';
+import { useApiService } from '../services/api';
 import ReactMarkdown from 'react-markdown';
+import { RefreshCw } from 'lucide-react';
 
 const ProjectView = () => {
   const [project, setProject] = useState(null);
   const [notes, setNotes] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [notesLoading, setNotesLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState('summary'); // 'summary' or 'notes'
+  const [notification, setNotification] = useState(null);
   const { projectId } = useParams();
-  const { user } = useAuth();
+  const { getProject, getNotes } = useApiService();
+  const { onNoteCreated: parentNoteCreated } = useOutletContext() || {};
 
-  const fetchProjectData = useCallback(async () => {
+  const showNotification = useCallback((message, type = 'success') => {
+    setNotification({ message, type });
+    setTimeout(() => setNotification(null), 3000);
+  }, []);
+
+  const fetchProjectData = useCallback(async (silent = false) => {
     if (!projectId) return;
     
     try {
-      setLoading(true);
+      if (!silent) setIsRefreshing(true);
       setError(null);
-      const [projectResponse, notesResponse] = await Promise.all([
-        getProject(projectId),
-        getNotes(projectId)
-      ]);
+      const projectResponse = await getProject(projectId);
       setProject(projectResponse.data);
-      setNotes(notesResponse.data);
-    } catch (error) {
-      console.error('Error fetching project data:', error);
+    } catch (err) {
+      console.error('Error fetching project data:', err);
       setError('Failed to load project data');
     } finally {
       setLoading(false);
+      if (!silent) setIsRefreshing(false);
     }
-  }, [projectId]);
+  }, [projectId, getProject]);
+
+  const fetchNotes = useCallback(async (silent = false) => {
+    if (!projectId) return;
+    
+    try {
+      if (!silent) setNotesLoading(true);
+      const notesResponse = await getNotes(projectId);
+      setNotes(notesResponse.data);
+    } catch (err) {
+      console.error('Error fetching notes:', err);
+    } finally {
+      if (!silent) setNotesLoading(false);
+    }
+  }, [projectId, getNotes]);
+
+  const refreshData = useCallback(async (silent = false) => {
+    await Promise.all([
+      fetchProjectData(silent),
+      fetchNotes(silent)
+    ]);
+  }, [fetchProjectData, fetchNotes]);
+
+  // Handle new note creation
+  const handleNoteCreated = useCallback(async (newNote) => {
+    if (!newNote) return;
+
+    // Check if the note belongs to this project
+    if (newNote.linked_projects?.includes(projectId)) {
+      // First update the notes list optimistically
+      setNotes(prevNotes => {
+        // Check if note already exists to prevent duplicates
+        const exists = prevNotes.some(note => note.id === newNote.id);
+        if (exists) return prevNotes;
+        return [newNote, ...prevNotes];
+      });
+
+      // Show notification
+      showNotification(`Note added to project: ${project?.name}`);
+
+      // Refresh both project and notes data silently
+      await refreshData(true);
+    }
+
+    // Call parent note created handler
+    if (parentNoteCreated) {
+      parentNoteCreated(newNote);
+    }
+  }, [projectId, project, showNotification, refreshData, parentNoteCreated]);
 
   // Initial data fetch
   useEffect(() => {
     if (projectId) {
-      fetchProjectData();
+      refreshData();
     }
-  }, [projectId, fetchProjectData]);
+  }, [projectId, refreshData]);
 
-  // Set up polling for updates
+  // Set up note creation listener
   useEffect(() => {
-    if (!projectId) return;
+    // Add the handler to the global note input
+    if (window.globalNoteHandlers) {
+      window.globalNoteHandlers.push(handleNoteCreated);
+    } else {
+      window.globalNoteHandlers = [handleNoteCreated];
+    }
 
-    const pollInterval = setInterval(() => {
-      fetchProjectData();
-    }, 5000); // Poll every 5 seconds
+    // Cleanup
+    return () => {
+      if (window.globalNoteHandlers) {
+        window.globalNoteHandlers = window.globalNoteHandlers.filter(
+          handler => handler !== handleNoteCreated
+        );
+      }
+    };
+  }, [handleNoteCreated]);
 
-    return () => clearInterval(pollInterval);
-  }, [projectId, fetchProjectData]);
+  // Handle tab change
+  const handleTabChange = useCallback((tab) => {
+    setActiveTab(tab);
+    if (tab === 'notes') {
+      fetchNotes();
+    }
+  }, [fetchNotes]);
 
   if (loading && !project) {
     return (
       <div className="flex items-center justify-center h-full">
         <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="p-4 text-red-600 bg-red-100 rounded-lg">
+        {error}
       </div>
     );
   }
@@ -68,72 +146,100 @@ const ProjectView = () => {
   }
 
   return (
-    <div className="max-w-4xl mx-auto p-6">
-      <div className="mb-6">
-        <h1 className="text-3xl font-bold text-gray-900">{project.name}</h1>
-        {project.description && (
-          <p className="text-gray-600 mt-2">{project.description}</p>
-        )}
-      </div>
-
-      {/* Tabs */}
-      <div className="border-b border-gray-200 mb-6">
-        <div className="flex space-x-8">
-          <button
-            onClick={() => setActiveTab('summary')}
-            className={`py-4 px-1 relative ${
-              activeTab === 'summary'
-                ? 'text-blue-600 border-b-2 border-blue-600'
-                : 'text-gray-500 hover:text-gray-700'
-            }`}
-          >
-            Summary
-          </button>
-          <button
-            onClick={() => setActiveTab('notes')}
-            className={`py-4 px-1 relative ${
-              activeTab === 'notes'
-                ? 'text-blue-600 border-b-2 border-blue-600'
-                : 'text-gray-500 hover:text-gray-700'
-            }`}
-          >
-            Notes
-          </button>
+    <div className="p-6 max-w-4xl mx-auto">
+      {notification && (
+        <div className={`fixed top-4 right-4 p-4 rounded-lg shadow-lg ${
+          notification.type === 'success' ? 'bg-green-100 text-green-800' : 'bg-blue-100 text-blue-800'
+        }`}>
+          {notification.message}
         </div>
+      )}
+
+      <div className="mb-6 flex justify-between items-center">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900">{project.name}</h1>
+          {project.description && (
+            <p className="mt-2 text-gray-600">{project.description}</p>
+          )}
+        </div>
+        <button
+          onClick={() => refreshData()}
+          disabled={isRefreshing || notesLoading}
+          className={`p-2 rounded-full hover:bg-gray-100 transition-colors ${
+            (isRefreshing || notesLoading) ? 'opacity-50 cursor-not-allowed' : ''
+          }`}
+          title="Refresh data"
+        >
+          <RefreshCw className={`w-5 h-5 text-gray-500 ${(isRefreshing || notesLoading) ? 'animate-spin' : ''}`} />
+        </button>
       </div>
 
-      {/* Tab Content */}
-      <div className="mt-6">
-        {activeTab === 'summary' ? (
-          <div className="space-y-6">
-            <div className="bg-white rounded-lg shadow-sm p-6">
-              <h3 className="text-lg font-medium text-gray-900 mb-4">Project Summary</h3>
+      <div className="mb-6">
+        <div className="border-b border-gray-200">
+          <nav className="-mb-px flex space-x-8">
+            <button
+              onClick={() => handleTabChange('summary')}
+              className={`py-4 px-1 border-b-2 font-medium text-sm ${
+                activeTab === 'summary'
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              Summary
+            </button>
+            <button
+              onClick={() => handleTabChange('notes')}
+              className={`py-4 px-1 border-b-2 font-medium text-sm ${
+                activeTab === 'notes'
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              Notes ({notes.length})
+            </button>
+          </nav>
+        </div>
+
+        <div className="mt-6">
+          {activeTab === 'summary' ? (
+            <div className="prose max-w-none">
               {project.summary ? (
-                <div className="prose prose-sm max-w-none">
-                  <ReactMarkdown>{project.summary}</ReactMarkdown>
-                </div>
+                <ReactMarkdown>{project.summary}</ReactMarkdown>
               ) : (
-                <p className="text-gray-500 italic">No summary available yet. Add some notes to generate a summary.</p>
+                <p className="text-gray-500 italic">
+                  No summary available yet. Add some notes to generate a summary.
+                </p>
               )}
             </div>
-          </div>
-        ) : (
-          <div className="space-y-4">
-            {notes.map((note) => (
-              <div key={note.id} className="bg-white rounded-lg shadow-sm p-6">
-                <p className="text-gray-800 whitespace-pre-wrap">{note.content}</p>
-                <div className="mt-2 text-sm text-gray-500">
-                  {new Date(note.created_at).toLocaleString()}
+          ) : (
+            <div className="space-y-4">
+              {notesLoading ? (
+                <div className="flex justify-center py-8">
+                  <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-500"></div>
                 </div>
-              </div>
-            ))}
-            {notes.length === 0 && (
-              <p className="text-center text-gray-500 py-8">
-                No notes yet. Start writing below!
-              </p>
-            )}
-          </div>
-        )}
+              ) : (
+                <>
+                  {notes.map((note) => (
+                    <div
+                      key={note.id}
+                      className="bg-white rounded-lg shadow-sm border border-gray-200 p-4"
+                    >
+                      <p className="text-gray-900 whitespace-pre-wrap">{note.content}</p>
+                      <p className="mt-2 text-sm text-gray-500">
+                        {new Date(note.created_at).toLocaleString()}
+                      </p>
+                    </div>
+                  ))}
+                  {notes.length === 0 && (
+                    <p className="text-gray-500 text-center py-8">
+                      No notes yet. Start adding notes to this project.
+                    </p>
+                  )}
+                </>
+              )}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

@@ -1,4 +1,5 @@
 from fastapi import Depends, HTTPException, status
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from google.oauth2 import id_token
 from google.auth.transport import requests
 import os
@@ -8,6 +9,7 @@ from typing import Optional, List
 from .models import User, UserActivity
 import requests as http_requests
 import logging
+from .jwt import verify_token
 
 # Initialize DynamoDB
 dynamodb = boto3.resource(
@@ -19,6 +21,7 @@ dynamodb = boto3.resource(
 )
 
 logger = logging.getLogger(__name__)
+security = HTTPBearer()
 
 def create_user_tables():
     """Create Users and UserActivity tables if they don't exist"""
@@ -57,37 +60,62 @@ def create_user_tables():
         print(f"Error creating tables: {str(e)}")
         raise
 
-async def get_current_user(token: str) -> Optional[User]:
-    """Validate Google token and return user"""
+def get_user_from_db(user_id: str) -> Optional[User]:
+    """Get user from database"""
     try:
-        print("=== Validating User Session ===")
-        print(f"Token received (first 10 chars): {token[:10]}...")
-        
+        users_table = dynamodb.Table('Users')
+        response = users_table.get_item(Key={'id': user_id})
+        if 'Item' in response:
+            return User(**response['Item'])
+        return None
+    except Exception as e:
+        logger.error(f"Database error: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Database error occurred"
+        )
+
+async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)) -> User:
+    """Get current user from JWT token"""
+    try:
+        payload = verify_token(credentials.credentials)
+        user = get_user_from_db(payload["sub"])
+        if user is None:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="User not found"
+            )
+        return user
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Could not validate credentials"
+        )
+
+async def validate_google_token(token: str) -> Optional[User]:
+    """Validate Google token and return or create user"""
+    try:
         # Get user info from Google
         response = http_requests.get(
             'https://www.googleapis.com/oauth2/v3/userinfo',
             headers={'Authorization': f'Bearer {token}'}
         )
-        print(f"Google API Response Status: {response.status_code}")
         
         if response.status_code != 200:
-            print(f"Invalid token response: {response.text}")
             raise ValueError("Invalid token")
             
         userinfo = response.json()
-        print(f"User info received: {userinfo.get('email')}")
         
         # Get user from database or create if not exists
         users_table = dynamodb.Table('Users')
         user_id = userinfo['sub']
-        print(f"Looking up user_id: {user_id}")
         
         try:
             response = users_table.get_item(Key={'id': user_id})
-            print(f"DynamoDB lookup response: {response.get('Item') is not None}")
             
             if 'Item' not in response:
-                print("Creating new user record")
                 # Create new user
                 user = {
                     'id': user_id,
@@ -97,32 +125,27 @@ async def get_current_user(token: str) -> Optional[User]:
                     'created_at': datetime.utcnow().isoformat()
                 }
                 users_table.put_item(Item=user)
-                print("New user created successfully")
             else:
                 user = response['Item']
-                print("Existing user found")
             
             # Log activity
             log_user_activity(user_id, "session_validated")
-            print("=== User Session Validated Successfully ===")
             
             return User(**user)
         except Exception as e:
-            print(f"Database error: {str(e)}")
+            logger.error(f"Database error: {str(e)}")
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Database error occurred"
             )
             
     except ValueError as e:
-        print(f"Token validation error: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=str(e),
             headers={"WWW-Authenticate": "Bearer"},
         )
     except Exception as e:
-        print(f"Unexpected error: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="An unexpected error occurred"
