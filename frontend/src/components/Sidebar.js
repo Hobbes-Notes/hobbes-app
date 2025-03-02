@@ -2,8 +2,9 @@ import React, { useState } from 'react';
 import { Link, useNavigate, useLocation, useParams } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { useApiService } from '../services/api';
-import { PlusIcon, TrashIcon, PencilIcon } from 'lucide-react';
+import { PlusIcon } from 'lucide-react';
 import ProjectFormModal from './ProjectFormModal';
+import ProjectTreeItem from './ProjectTreeItem';
 
 const Sidebar = ({ projects, onProjectCreated, onProjectDeleted }) => {
   const { user, logout } = useAuth();
@@ -16,6 +17,7 @@ const Sidebar = ({ projects, onProjectCreated, onProjectDeleted }) => {
   const [showProjectForm, setShowProjectForm] = useState(false);
   const [projectToDelete, setProjectToDelete] = useState(null);
   const [editingProject, setEditingProject] = useState(null);
+  const [selectedParentId, setSelectedParentId] = useState(null);
 
   const handleLogout = async () => {
     await logout();
@@ -26,18 +28,35 @@ const Sidebar = ({ projects, onProjectCreated, onProjectDeleted }) => {
     try {
       setIsSubmitting(true);
       setError(null);
+      
+      // Find parent project if we have a parent_id
+      const parentProject = selectedParentId ? 
+        projects.find(p => p.id === selectedParentId) : null;
+      
+      // Check nesting level before making the API call
+      if (parentProject) {
+        const parentLevel = parentProject.level || 1;
+        if (parentLevel >= 3) {
+          setError("Cannot create project: Maximum nesting level (3) exceeded");
+          setIsSubmitting(false);
+          return;
+        }
+      }
+      
       const response = await createProject({
         ...projectData,
-        user_id: user.id
+        user_id: user.id,
+        parent_id: selectedParentId
       });
+      
       setShowProjectForm(false);
+      setSelectedParentId(null);
       if (onProjectCreated) {
         await onProjectCreated();
       }
       navigate(`/projects/${response.data.id}`);
     } catch (error) {
       console.error('Error creating project:', error);
-      // Extract error message from the response if available
       const errorMessage = error.response?.data?.detail || 'Failed to create project. Please try again.';
       setError(errorMessage);
     } finally {
@@ -62,7 +81,8 @@ const Sidebar = ({ projects, onProjectCreated, onProjectDeleted }) => {
       }
     } catch (error) {
       console.error('Error updating project:', error);
-      setError('Failed to update project. Please try again.');
+      const errorMessage = error.response?.data?.detail || 'Failed to update project. Please try again.';
+      setError(errorMessage);
     } finally {
       setIsSubmitting(false);
     }
@@ -79,15 +99,25 @@ const Sidebar = ({ projects, onProjectCreated, onProjectDeleted }) => {
       navigate('/projects');
     } catch (error) {
       console.error('Error deleting project:', error);
-      setError('Failed to delete project. Please try again.');
+      const errorMessage = error.response?.data?.detail || 'Failed to delete project. Please try again.';
+      setError(errorMessage);
     }
   };
 
   const handleCloseForm = () => {
     setShowProjectForm(false);
     setEditingProject(null);
+    setSelectedParentId(null);
     setError(null);
   };
+
+  const handleAddChild = (parentId) => {
+    setSelectedParentId(parentId);
+    setShowProjectForm(true);
+  };
+
+  // Get root level projects
+  const rootProjects = projects.filter(p => !p.parent_id);
 
   return (
     <div className="h-full flex flex-col">
@@ -97,7 +127,7 @@ const Sidebar = ({ projects, onProjectCreated, onProjectDeleted }) => {
         onClose={handleCloseForm}
         onSubmit={editingProject ? handleEditProject : handleCreateProject}
         initialData={editingProject || { name: '', description: '' }}
-        title={editingProject ? 'Edit Project' : 'New Project'}
+        title={editingProject ? 'Edit Project' : (selectedParentId ? 'New Child Project' : 'New Project')}
         submitLabel={editingProject ? 'Save' : 'Create'}
         isSubmitting={isSubmitting}
         error={error}
@@ -142,7 +172,10 @@ const Sidebar = ({ projects, onProjectCreated, onProjectDeleted }) => {
           {/* New Project Button */}
           <div className="mt-2">
             <button
-              onClick={() => setShowProjectForm(true)}
+              onClick={() => {
+                setSelectedParentId(null);
+                setShowProjectForm(true);
+              }}
               className="w-full flex items-center justify-center px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
             >
               <PlusIcon className="w-4 h-4 mr-2" />
@@ -150,46 +183,19 @@ const Sidebar = ({ projects, onProjectCreated, onProjectDeleted }) => {
             </button>
           </div>
 
-          {/* Projects List */}
+          {/* Projects Tree */}
           <div className="mt-3 space-y-0.5">
-            {projects?.map((project) => (
-              <div
+            {rootProjects.map((project) => (
+              <ProjectTreeItem
                 key={project.id}
-                className={`group flex items-center justify-between px-4 py-2 rounded-lg transition-colors ${
-                  currentProjectId === project.id
-                    ? 'bg-blue-50 text-blue-700'
-                    : 'hover:bg-gray-50'
-                }`}
-              >
-                <button
-                  onClick={() => navigate(`/projects/${project.id}`)}
-                  className="flex-1 text-left truncate"
-                >
-                  <span className="font-medium">{project.name}</span>
-                </button>
-                <div className="flex items-center space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setEditingProject(project);
-                    }}
-                    className="p-1 text-gray-400 hover:text-blue-500 transition-colors"
-                    title="Edit project"
-                  >
-                    <PencilIcon className="w-4 h-4" />
-                  </button>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setProjectToDelete(project.id);
-                    }}
-                    className="p-1 text-gray-400 hover:text-red-500 transition-colors"
-                    title="Delete project"
-                  >
-                    <TrashIcon className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
+                project={project}
+                projects={projects}
+                currentProjectId={currentProjectId}
+                onNavigate={(id) => navigate(`/projects/${id}`)}
+                onAddChild={handleAddChild}
+                onEdit={setEditingProject}
+                onDelete={setProjectToDelete}
+              />
             ))}
           </div>
         </div>
