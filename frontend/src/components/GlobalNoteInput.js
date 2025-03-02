@@ -49,6 +49,17 @@ const GlobalNoteInput = ({ projects, onNoteCreated }) => {
         });
       }
 
+      // Call any registered global handlers
+      if (window.globalNoteHandlers) {
+        window.globalNoteHandlers.forEach(handler => {
+          try {
+            handler(newNote);
+          } catch (error) {
+            console.error('Error in note handler:', error);
+          }
+        });
+      }
+
       // Pass the new note data to parent components
       if (onNoteCreated) {
         onNoteCreated(newNote);

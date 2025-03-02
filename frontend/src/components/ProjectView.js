@@ -12,15 +12,9 @@ const ProjectView = () => {
   const [error, setError] = useState(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState('summary'); // 'summary' or 'notes'
-  const [notification, setNotification] = useState(null);
   const { projectId } = useParams();
   const { getProject, getNotes } = useApiService();
   const { onNoteCreated: parentNoteCreated } = useOutletContext() || {};
-
-  const showNotification = useCallback((message, type = 'success') => {
-    setNotification({ message, type });
-    setTimeout(() => setNotification(null), 3000);
-  }, []);
 
   const fetchProjectData = useCallback(async (silent = false) => {
     if (!projectId) return;
@@ -74,9 +68,6 @@ const ProjectView = () => {
         return [newNote, ...prevNotes];
       });
 
-      // Show notification
-      showNotification(`Note added to project: ${project?.name}`);
-
       // Refresh both project and notes data silently
       await refreshData(true);
     }
@@ -85,7 +76,7 @@ const ProjectView = () => {
     if (parentNoteCreated) {
       parentNoteCreated(newNote);
     }
-  }, [projectId, project, showNotification, refreshData, parentNoteCreated]);
+  }, [projectId, refreshData, parentNoteCreated]);
 
   // Initial data fetch
   useEffect(() => {
@@ -147,14 +138,6 @@ const ProjectView = () => {
 
   return (
     <div className="p-6 max-w-4xl mx-auto">
-      {notification && (
-        <div className={`fixed top-4 right-4 p-4 rounded-lg shadow-lg ${
-          notification.type === 'success' ? 'bg-green-100 text-green-800' : 'bg-blue-100 text-blue-800'
-        }`}>
-          {notification.message}
-        </div>
-      )}
-
       <div className="mb-6 flex justify-between items-center">
         <div>
           <h1 className="text-3xl font-bold text-gray-900">{project.name}</h1>
