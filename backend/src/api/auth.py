@@ -5,8 +5,8 @@ from google.auth.transport import requests
 import os
 import boto3
 from datetime import datetime
-from typing import Optional, List
-from .models import User, UserActivity
+from typing import Optional
+from .models import User
 import requests as http_requests
 import logging
 from .jwt import verify_token
@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 security = HTTPBearer()
 
 def create_user_tables():
-    """Create Users and UserActivity tables if they don't exist"""
+    """Create Users table if it doesn't exist"""
     try:
         existing_tables = [table.name for table in dynamodb.tables.all()]
         
@@ -35,27 +35,9 @@ def create_user_tables():
                 AttributeDefinitions=[{'AttributeName': 'id', 'AttributeType': 'S'}],
                 ProvisionedThroughput={'ReadCapacityUnits': 5, 'WriteCapacityUnits': 5}
             )
-        
-        if 'UserActivity' not in existing_tables:
-            dynamodb.create_table(
-                TableName='UserActivity',
-                KeySchema=[
-                    {'AttributeName': 'user_id', 'KeyType': 'HASH'},
-                    {'AttributeName': 'timestamp', 'KeyType': 'RANGE'}
-                ],
-                AttributeDefinitions=[
-                    {'AttributeName': 'user_id', 'AttributeType': 'S'},
-                    {'AttributeName': 'timestamp', 'AttributeType': 'S'}
-                ],
-                ProvisionedThroughput={'ReadCapacityUnits': 5, 'WriteCapacityUnits': 5}
-            )
-            logger.info("UserActivity table created successfully")
-        else:
-            logger.info("UserActivity table already exists")
             
-        # Wait for tables to be active
+        # Wait for table to be active
         dynamodb.Table('Users').wait_until_exists()
-        dynamodb.Table('UserActivity').wait_until_exists()
     except Exception as e:
         print(f"Error creating tables: {str(e)}")
         raise
@@ -128,9 +110,6 @@ async def validate_google_token(token: str) -> Optional[User]:
             else:
                 user = response['Item']
             
-            # Log activity
-            log_user_activity(user_id, "session_validated")
-            
             return User(**user)
         except Exception as e:
             logger.error(f"Database error: {str(e)}")
@@ -149,44 +128,4 @@ async def validate_google_token(token: str) -> Optional[User]:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="An unexpected error occurred"
-        )
-
-def log_user_activity(user_id: str, activity_type: str, details: dict = None):
-    """Log user activity with additional details"""
-    try:
-        logger.info(f"Attempting to log activity - Type: {activity_type}, User: {user_id}")
-        logger.info(f"Activity details: {details}")
-        
-        activity_table = dynamodb.Table('UserActivity')
-        activity = {
-            'user_id': user_id,
-            'activity_type': activity_type,
-            'timestamp': datetime.utcnow().isoformat(),
-            'details': details or {}
-        }
-        logger.info(f"Activity data to be stored: {activity}")
-        
-        activity_table.put_item(Item=activity)
-        logger.info("Activity logged successfully")
-    except Exception as e:
-        logger.error(f"Error logging activity: {str(e)}")
-        logger.error(f"Failed activity data: {activity_type=}, {user_id=}, {details=}")
-        # Don't raise the error as this is a non-critical operation
-
-async def get_user_activities(user_id: str, limit: int = 10) -> List[UserActivity]:
-    """Get user's recent activities"""
-    try:
-        activity_table = dynamodb.Table('UserActivity')
-        response = activity_table.query(
-            KeyConditionExpression='user_id = :uid',
-            ExpressionAttributeValues={':uid': user_id},
-            Limit=limit,
-            ScanIndexForward=False  # Sort in descending order (most recent first)
-        )
-        return [UserActivity(**item) for item in response.get('Items', [])]
-    except Exception as e:
-        print(f"Error fetching activities: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Error fetching user activities"
         ) 
