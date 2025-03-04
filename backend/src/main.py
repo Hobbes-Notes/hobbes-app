@@ -2,9 +2,11 @@ import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import os
-from api.routes import router
 from api.controllers.auth_controller import router as auth_router
+from api.controllers.project_controller import router as project_router
+from api.controllers.note_controller import router as note_router
 from api.services.auth_service import create_user_tables
+from api.services.database_service import DatabaseService
 
 # Configure logging
 logging.basicConfig(
@@ -29,14 +31,19 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Create database service
+database_service = DatabaseService()
+
 # Create DynamoDB tables if they don't exist
 @app.on_event("startup")
 async def startup_event():
+    await database_service.create_tables()
     create_user_tables()
 
 # Include routers
-app.include_router(router)
 app.include_router(auth_router, prefix="/auth", tags=["auth"])
+app.include_router(project_router, tags=["projects"])
+app.include_router(note_router, tags=["notes"])
 
 @app.get("/")
 async def read_root():
