@@ -5,26 +5,23 @@ This module provides controller-level functionality for project routes,
 handling HTTP requests and responses for project operations.
 """
 
-from fastapi import APIRouter, HTTPException, Query, Depends
-from typing import List, Optional, Dict
-import json
-import logging
+from fastapi import APIRouter, HTTPException, Depends
+from typing import List
 
 from ..models.project import Project, ProjectCreate, ProjectUpdate
 from ..services.project_service import ProjectService
-from ..services.database_service import DatabaseService
 
 # Set up logging
+import logging
 logger = logging.getLogger(__name__)
 
 # Create router
 router = APIRouter()
 
-# Create services
-database_service = DatabaseService()
-project_service = ProjectService(database_service.get_dynamodb_resource())
+# Create service
+project_service = ProjectService()
 
-# Dependency to get services
+# Dependency to get service
 def get_project_service() -> ProjectService:
     return project_service
 
@@ -34,7 +31,7 @@ async def get_project(
     project_service: ProjectService = Depends(get_project_service)
 ):
     """
-    Get a project by ID.
+    Get a project by its ID.
     
     Args:
         project_id: The unique identifier of the project

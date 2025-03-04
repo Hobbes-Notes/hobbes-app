@@ -7,6 +7,7 @@ from api.controllers.project_controller import router as project_router
 from api.controllers.note_controller import router as note_router
 from api.services.auth_service import create_user_tables
 from api.services.database_service import DatabaseService
+from api.repositories.impl import get_database_repository
 
 # Configure logging
 logging.basicConfig(
