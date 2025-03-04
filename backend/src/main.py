@@ -3,8 +3,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import os
 from api.routes import router
-from api.routes.auth import router as auth_router
-from api.auth import create_user_tables
+from api.controllers.auth_controller import router as auth_router
+from api.services.auth_service import create_user_tables
 
 # Configure logging
 logging.basicConfig(

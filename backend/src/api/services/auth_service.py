@@ -1,15 +1,20 @@
-from fastapi import Depends, HTTPException, status
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from google.oauth2 import id_token
-from google.auth.transport import requests
+"""
+Authentication Service Layer
+
+This module provides service-level functionality for user authentication,
+including database operations and token validation.
+"""
+
 import os
 import boto3
+import logging
 from datetime import datetime
 from typing import Optional
-from .models import User
 import requests as http_requests
-import logging
-from .jwt import verify_token
+from fastapi import HTTPException, status
+
+from ..models.user import User
+from .jwt_service import verify_token
 
 # Initialize DynamoDB
 dynamodb = boto3.resource(
@@ -21,10 +26,13 @@ dynamodb = boto3.resource(
 )
 
 logger = logging.getLogger(__name__)
-security = HTTPBearer()
 
 def create_user_tables():
-    """Create Users table if it doesn't exist"""
+    """
+    Create Users table if it doesn't exist
+    
+    This function initializes the DynamoDB table structure for user data.
+    """
     try:
         existing_tables = [table.name for table in dynamodb.tables.all()]
         
@@ -39,11 +47,22 @@ def create_user_tables():
         # Wait for table to be active
         dynamodb.Table('Users').wait_until_exists()
     except Exception as e:
-        print(f"Error creating tables: {str(e)}")
+        logger.error(f"Error creating tables: {str(e)}")
         raise
 
 def get_user_from_db(user_id: str) -> Optional[User]:
-    """Get user from database"""
+    """
+    Get user from database
+    
+    Args:
+        user_id: The unique identifier for the user
+        
+    Returns:
+        User object if found, None otherwise
+        
+    Raises:
+        HTTPException: If a database error occurs
+    """
     try:
         users_table = dynamodb.Table('Users')
         response = users_table.get_item(Key={'id': user_id})
@@ -57,27 +76,19 @@ def get_user_from_db(user_id: str) -> Optional[User]:
             detail="Database error occurred"
         )
 
-async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)) -> User:
-    """Get current user from JWT token"""
-    try:
-        payload = verify_token(credentials.credentials)
-        user = get_user_from_db(payload["sub"])
-        if user is None:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="User not found"
-            )
-        return user
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Could not validate credentials"
-        )
-
 async def validate_google_token(token: str) -> Optional[User]:
-    """Validate Google token and return or create user"""
+    """
+    Validate Google token and return or create user
+    
+    Args:
+        token: The Google OAuth token to validate
+        
+    Returns:
+        User object if token is valid
+        
+    Raises:
+        HTTPException: If token is invalid or a database error occurs
+    """
     try:
         # Get user info from Google
         response = http_requests.get(
