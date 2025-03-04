@@ -13,7 +13,6 @@ import logging
 from ..models.note import Note, NoteCreate, PaginatedNotes
 from ..services.note_service import NoteService
 from ..services.project_service import ProjectService
-from ..services.database_service import DatabaseService
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -22,9 +21,8 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 # Create services
-database_service = DatabaseService()
-project_service = ProjectService(database_service.get_dynamodb_resource())
-note_service = NoteService(database_service.get_dynamodb_resource(), project_service)
+project_service = ProjectService()
+note_service = NoteService(project_service=project_service)
 
 # Dependency to get services
 def get_note_service() -> NoteService:
@@ -43,7 +41,7 @@ async def create_note(
         note_service: The note service dependency
         
     Returns:
-        The created note with associated projects
+        The created note
     """
     return await note_service.create_note(note)
 
@@ -53,14 +51,14 @@ async def get_note(
     note_service: NoteService = Depends(get_note_service)
 ):
     """
-    Get a note by ID.
+    Get a note by its ID.
     
     Args:
         note_id: The unique identifier of the note
         note_service: The note service dependency
         
     Returns:
-        The note data with associated projects
+        The note data
     """
     return await note_service.get_note(note_id)
 
@@ -74,11 +72,11 @@ async def list_notes(
     note_service: NoteService = Depends(get_note_service)
 ):
     """
-    Get paginated notes, either by project or by user.
+    Get paginated notes by project or user.
     
     Args:
-        project_id: Optional project ID to filter notes by
-        user_id: Optional user ID to filter notes by
+        project_id: Optional project ID to filter notes
+        user_id: Optional user ID to filter notes
         page: The page number (1-indexed)
         page_size: The number of items per page
         exclusive_start_key: Optional key for pagination
