@@ -11,7 +11,7 @@ import requests as http_requests
 from fastapi import HTTPException, status
 from datetime import datetime
 
-from ..models.user import User
+from ..models.user import User, UserCreate
 from .jwt_service import verify_token
 from .user_service import UserService
 
@@ -64,16 +64,15 @@ class AuthService:
             
             if not user:
                 # Create new user
-                user_data = {
-                    'id': user_id,
-                    'email': userinfo.get('email', ''),
-                    'name': userinfo.get('name', ''),
-                    'picture': userinfo.get('picture', ''),
-                    'created_at': datetime.now().isoformat()
-                }
+                user_create = UserCreate(
+                    id=user_id,
+                    email=userinfo.get('email', ''),
+                    name=userinfo.get('name', ''),
+                    picture_url=userinfo.get('picture', '')
+                )
                 
                 # Save to database using user service
-                user = await self.user_service.create_user(user_data)
+                user = await self.user_service.create_user(user_create)
                 logger.info(f"Created new user: {user.id}")
             
             return user

@@ -1,9 +1,3 @@
-"""
-Note Repository Implementation
-
-This module provides a DynamoDB implementation of the note repository interface.
-"""
-
 import uuid
 import logging
 from datetime import datetime
@@ -51,15 +45,13 @@ class DynamoDBNoteRepository(NoteRepository):
                 ],
                 attribute_definitions=[
                     {'AttributeName': 'id', 'AttributeType': 'S'},
-                    {'AttributeName': 'user_id', 'AttributeType': 'S'},
-                    {'AttributeName': 'created_at', 'AttributeType': 'S'}
+                    {'AttributeName': 'user_id', 'AttributeType': 'S'}
                 ],
                 global_secondary_indexes=[
                     {
-                        'IndexName': 'user_id-created_at-index',
+                        'IndexName': 'user_id-index',
                         'KeySchema': [
-                            {'AttributeName': 'user_id', 'KeyType': 'HASH'},
-                            {'AttributeName': 'created_at', 'KeyType': 'RANGE'}
+                            {'AttributeName': 'user_id', 'KeyType': 'HASH'}
                         ],
                         'Projection': {
                             'ProjectionType': 'ALL'
@@ -75,53 +67,35 @@ class DynamoDBNoteRepository(NoteRepository):
                     'WriteCapacityUnits': 5
                 }
             )
-            logger.info(f"{self.table_name} table created successfully")
             
-            # Wait for the table to be active
+            # Wait for table to be active
             self.dynamodb_client.get_client().get_waiter('table_exists').wait(TableName=self.table_name)
-            logger.info(f"{self.table_name} table is now active")
+            logger.info(f"{self.table_name} table created successfully")
         else:
             logger.info(f"{self.table_name} table already exists")
-
-        # Create ProjectNotes mapping table if it doesn't exist
+            
+        # Create ProjectNotes table if it doesn't exist
         if not self.dynamodb_client.table_exists(self.project_notes_table_name):
-            logger.info(f"Creating {self.project_notes_table_name} mapping table...")
+            logger.info(f"Creating {self.project_notes_table_name} table...")
             self.dynamodb_client.create_table(
                 table_name=self.project_notes_table_name,
                 key_schema=[
                     {'AttributeName': 'project_id', 'KeyType': 'HASH'},
-                    {'AttributeName': 'created_at', 'KeyType': 'RANGE'}
+                    {'AttributeName': 'note_id', 'KeyType': 'RANGE'}
                 ],
                 attribute_definitions=[
                     {'AttributeName': 'project_id', 'AttributeType': 'S'},
-                    {'AttributeName': 'created_at', 'AttributeType': 'S'},
                     {'AttributeName': 'note_id', 'AttributeType': 'S'}
-                ],
-                global_secondary_indexes=[
-                    {
-                        'IndexName': 'note_id-index',
-                        'KeySchema': [
-                            {'AttributeName': 'note_id', 'KeyType': 'HASH'}
-                        ],
-                        'Projection': {
-                            'ProjectionType': 'ALL'
-                        },
-                        'ProvisionedThroughput': {
-                            'ReadCapacityUnits': 5,
-                            'WriteCapacityUnits': 5
-                        }
-                    }
                 ],
                 provisioned_throughput={
                     'ReadCapacityUnits': 5,
                     'WriteCapacityUnits': 5
                 }
             )
-            logger.info(f"{self.project_notes_table_name} mapping table created successfully")
             
-            # Wait for the table to be active
+            # Wait for table to be active
             self.dynamodb_client.get_client().get_waiter('table_exists').wait(TableName=self.project_notes_table_name)
-            logger.info(f"{self.project_notes_table_name} table is now active")
+            logger.info(f"{self.project_notes_table_name} table created successfully")
         else:
             logger.info(f"{self.project_notes_table_name} table already exists")
     

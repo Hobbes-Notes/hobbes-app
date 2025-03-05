@@ -5,10 +5,10 @@ This module provides controller-level functionality for user routes,
 handling HTTP requests and responses for user operations.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, status, Body
-from typing import Dict, List
+from fastapi import APIRouter, Depends, HTTPException, status
+from typing import List
 
-from ..models.user import User
+from ..models.user import User, UserUpdate
 from ..services.user_service import UserService
 from .auth_controller import get_current_user
 
@@ -37,7 +37,7 @@ async def get_current_user_profile(current_user: User = Depends(get_current_user
 
 @router.patch("/users/me", response_model=User)
 async def update_current_user(
-    user_data: Dict = Body(...),
+    user_data: UserUpdate,
     current_user: User = Depends(get_current_user),
     user_service: UserService = Depends(get_user_service)
 ):
@@ -53,10 +53,6 @@ async def update_current_user(
         Updated User object
     """
     try:
-        # Prevent updating id
-        if 'id' in user_data:
-            del user_data['id']
-            
         updated_user = await user_service.update_user(current_user.id, user_data)
         return updated_user
     except Exception as e:

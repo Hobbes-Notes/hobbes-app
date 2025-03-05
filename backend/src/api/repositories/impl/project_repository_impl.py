@@ -1,9 +1,3 @@
-"""
-Project Repository Implementation
-
-This module provides a DynamoDB implementation of the project repository interface.
-"""
-
 import uuid
 import logging
 from datetime import datetime
@@ -51,6 +45,19 @@ class DynamoDBProjectRepository(ProjectRepository):
                 ],
                 global_secondary_indexes=[
                     {
+                        'IndexName': 'user_id-index',
+                        'KeySchema': [
+                            {'AttributeName': 'user_id', 'KeyType': 'HASH'}
+                        ],
+                        'Projection': {
+                            'ProjectionType': 'ALL'
+                        },
+                        'ProvisionedThroughput': {
+                            'ReadCapacityUnits': 5,
+                            'WriteCapacityUnits': 5
+                        }
+                    },
+                    {
                         'IndexName': 'name-user_id-index',
                         'KeySchema': [
                             {'AttributeName': 'name', 'KeyType': 'HASH'},
@@ -70,11 +77,10 @@ class DynamoDBProjectRepository(ProjectRepository):
                     'WriteCapacityUnits': 5
                 }
             )
-            logger.info(f"{self.table_name} table created successfully")
             
-            # Wait for the table to be active
+            # Wait for table to be active
             self.dynamodb_client.get_client().get_waiter('table_exists').wait(TableName=self.table_name)
-            logger.info(f"{self.table_name} table is now active")
+            logger.info(f"{self.table_name} table created successfully")
         else:
             logger.info(f"{self.table_name} table already exists")
             
