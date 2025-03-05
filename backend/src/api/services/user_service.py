@@ -7,9 +7,9 @@ including CRUD operations and business logic.
 
 import logging
 from datetime import datetime
-from typing import Optional, Dict
+from typing import Optional
 
-from ..models.user import User
+from ..models.user import User, UserCreate, UserUpdate
 from ..repositories.user_repository import UserRepository
 from ..repositories.impl.user_repository_impl import UserRepositoryImpl
 
@@ -43,7 +43,7 @@ class UserService:
         """
         return await self.user_repository.get_user(user_id)
     
-    async def create_user(self, user_data: Dict) -> User:
+    async def create_user(self, user_data: UserCreate) -> User:
         """
         Create a new user.
         
@@ -53,13 +53,22 @@ class UserService:
         Returns:
             The created User object
         """
-        # Ensure created_at is set
-        if 'created_at' not in user_data:
-            user_data['created_at'] = datetime.now().isoformat()
-            
-        return await self.user_repository.create_user(user_data)
+        # Create a complete user with timestamp
+        timestamp = datetime.now().isoformat()
+        
+        # Create a User object with all required fields
+        user = User(
+            id=user_data.id,
+            email=user_data.email,
+            name=user_data.name,
+            picture_url=user_data.picture_url,
+            created_at=timestamp
+        )
+        
+        # Create the user in the repository
+        return await self.user_repository.create_user(UserCreate(**user.dict()))
     
-    async def update_user(self, user_id: str, user_data: Dict) -> User:
+    async def update_user(self, user_id: str, user_data: UserUpdate) -> User:
         """
         Update a user.
         

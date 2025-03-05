@@ -1,27 +1,18 @@
-"""
-User Repository Implementation
-
-This module provides the implementation for user data operations.
-"""
-
 import logging
 from typing import Optional, Dict
 
 from ..user_repository import UserRepository
-from ...models.user import User
+from ...models.user import User, UserCreate, UserUpdate
 from infrastructure.dynamodb_client import get_dynamodb_client
 
 logger = logging.getLogger(__name__)
 
 class UserRepositoryImpl(UserRepository):
-    """Implementation of the UserRepository interface."""
     
     def __init__(self):
-        """Initialize the repository with a DynamoDB client."""
         self.dynamodb_client = get_dynamodb_client()
     
     async def create_user_table(self) -> None:
-        """Create the Users table if it doesn't exist."""
         try:
             if not self.dynamodb_client.table_exists('Users'):
                 logger.info("Creating Users table...")
@@ -41,30 +32,12 @@ class UserRepositoryImpl(UserRepository):
             logger.error(f"Error creating user tables: {str(e)}")
             raise
     
-    def _dict_to_user(self, data: Dict) -> User:
-        """
-        Convert a dictionary to a User domain model.
-        
-        Args:
-            data: Dictionary containing user data
-            
-        Returns:
-            User domain model
-        """
+    def _dict_to_user(self, data: Dict) -> Optional[User]:
         if not data:
             return None
         return User(**data)
     
     async def get_user(self, user_id: str) -> Optional[User]:
-        """
-        Get a user by ID.
-        
-        Args:
-            user_id: The user's ID
-            
-        Returns:
-            User domain model if found, None otherwise
-        """
         try:
             item = self.dynamodb_client.get_item(table_name='Users', key={'id': user_id})
             return self._dict_to_user(item)
@@ -72,37 +45,24 @@ class UserRepositoryImpl(UserRepository):
             logger.error(f"Error getting user {user_id}: {str(e)}")
             return None
     
-    async def create_user(self, user_data: Dict) -> User:
-        """
-        Create a new user.
-        
-        Args:
-            user_data: The user data to save
-            
-        Returns:
-            The created User domain model
-        """
+    async def create_user(self, user_data: UserCreate) -> User:
         try:
-            self.dynamodb_client.put_item(table_name='Users', item=user_data)
-            return self._dict_to_user(user_data)
+            # Convert to dict for DynamoDB
+            user_dict = user_data.dict()
+            self.dynamodb_client.put_item(table_name='Users', item=user_dict)
+            return self._dict_to_user(user_dict)
         except Exception as e:
             logger.error(f"Error creating user: {str(e)}")
             raise
     
-    async def update_user(self, user_id: str, user_data: Dict) -> User:
-        """
-        Update a user.
-        
-        Args:
-            user_id: The user's ID
-            user_data: The user data to update
-            
-        Returns:
-            The updated User domain model
-        """
+    async def update_user(self, user_id: str, user_data: UserUpdate) -> User:
         try:
-            # Remove id from update data as it's the key
-            update_data = {k: v for k, v in user_data.items() if k != 'id'}
+            # Convert to dict and remove None values
+            update_data = {k: v for k, v in user_data.dict().items() if v is not None}
+            
+            if not update_data:
+                # No fields to update, return current user
+                return await self.get_user(user_id)
             
             # Build update expression
             update_expression = "SET " + ", ".join(f"#{k} = :{k}" for k in update_data.keys())
