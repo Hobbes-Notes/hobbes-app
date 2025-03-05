@@ -11,6 +11,8 @@ from typing import Dict, List, Optional
 from fastapi import HTTPException
 
 from ...repositories.project_repository import ProjectRepository
+from ...models.project import Project, ProjectCreate
+from ...models.pagination import PaginatedResponse, PaginationParams
 from infrastructure.dynamodb_client import get_dynamodb_client
 
 # Set up logging
@@ -58,7 +60,27 @@ class DynamoDBProjectRepository(ProjectRepository):
         else:
             logger.info(f"{self.table_name} table already exists")
     
-    async def get_by_id(self, id: str) -> Optional[Dict]:
+    def _dict_to_project(self, data: Dict) -> Optional[Project]:
+        """
+        Convert a dictionary to a Project domain model.
+        
+        Args:
+            data: Dictionary containing project data
+            
+        Returns:
+            Project domain model or None if data is None
+        """
+        if not data:
+            return None
+        
+        # Ensure data is a dictionary
+        if not isinstance(data, dict):
+            logger.error(f"Expected dictionary but got {type(data)}: {data}")
+            return None
+            
+        return Project(**data)
+    
+    async def get_by_id(self, id: str) -> Optional[Project]:
         """
         Get a project by its ID.
         
@@ -66,16 +88,16 @@ class DynamoDBProjectRepository(ProjectRepository):
             id: The unique identifier of the project
             
         Returns:
-            The project data as a dictionary if found, None otherwise
+            The project as a Project domain model if found, None otherwise
         """
         try:
             item = self.dynamodb_client.get_item(table_name=self.table_name, key={'id': id})
-            return item
+            return self._dict_to_project(item)
         except Exception as e:
             logger.error(f"Error getting project with ID {id}: {str(e)}")
             return None
     
-    async def create(self, data: Dict) -> Dict:
+    async def create(self, data: ProjectCreate) -> Project:
         """
         Create a new project.
         
@@ -83,24 +105,30 @@ class DynamoDBProjectRepository(ProjectRepository):
             data: The project data to create
             
         Returns:
-            The created project as a dictionary
+            The created project as a Project domain model
         """
         try:
+            # Convert to dictionary if it's a Pydantic model
+            if hasattr(data, 'dict'):
+                data_dict = data.dict()
+            else:
+                data_dict = dict(data)
+                
             # Generate a unique ID and timestamp if not provided
-            if 'id' not in data:
-                data['id'] = str(uuid.uuid4())
-            if 'created_at' not in data:
-                data['created_at'] = datetime.utcnow().isoformat()
+            if 'id' not in data_dict:
+                data_dict['id'] = str(uuid.uuid4())
+            if 'created_at' not in data_dict:
+                data_dict['created_at'] = datetime.utcnow().isoformat()
             
             # Save to DynamoDB
-            self.dynamodb_client.put_item(table_name=self.table_name, item=data)
+            self.dynamodb_client.put_item(table_name=self.table_name, item=data_dict)
             
-            return data
+            return self._dict_to_project(data_dict)
         except Exception as e:
             logger.error(f"Error creating project: {str(e)}")
             raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
     
-    async def update(self, id: str, data: Dict) -> Optional[Dict]:
+    async def update(self, id: str, data: Dict) -> Optional[Project]:
         """
         Update an existing project.
         
@@ -109,7 +137,7 @@ class DynamoDBProjectRepository(ProjectRepository):
             data: The updated data
             
         Returns:
-            The updated project if found, None otherwise
+            The updated project as a Project domain model if found, None otherwise
         """
         try:
             # Check if project exists
@@ -141,7 +169,7 @@ class DynamoDBProjectRepository(ProjectRepository):
                 return_values="ALL_NEW"
             )
             
-            return response.get('Attributes')
+            return self._dict_to_project(response.get('Attributes'))
         except Exception as e:
             logger.error(f"Error updating project {id}: {str(e)}")
             raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
@@ -170,7 +198,7 @@ class DynamoDBProjectRepository(ProjectRepository):
             logger.error(f"Error deleting project {id}: {str(e)}")
             raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
     
-    async def get_projects_by_user(self, user_id: str) -> List[Dict]:
+    async def get_projects_by_user(self, user_id: str) -> List[Project]:
         """
         Get all projects for a user.
         
@@ -178,7 +206,7 @@ class DynamoDBProjectRepository(ProjectRepository):
             user_id: The unique identifier of the user
             
         Returns:
-            List of project dictionaries
+            List of Project domain models
         """
         try:
             # Scan for projects with the given user_id
@@ -188,59 +216,61 @@ class DynamoDBProjectRepository(ProjectRepository):
                 expression_attribute_values={":user_id": user_id}
             )
             
-            projects = response.get('Items', [])
+            # Ensure we have items in the response
+            if not isinstance(response, dict) or 'Items' not in response:
+                logger.error(f"Unexpected response format: {response}")
+                return []
             
-            # Sort projects by creation date (newest first)
-            projects.sort(key=lambda x: x.get('created_at', ''), reverse=True)
+            # Convert to Project domain models
+            projects = []
+            for item in response['Items']:
+                project = self._dict_to_project(item)
+                if project:
+                    projects.append(project)
             
             return projects
         except Exception as e:
-            logger.error(f"Error retrieving projects for user {user_id}: {str(e)}")
+            logger.error(f"Error getting projects for user {user_id}: {str(e)}")
             raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
     
-    async def get_or_create_misc_project(self, user_id: str) -> Dict:
+    async def get_or_create_misc_project(self, user_id: str) -> Project:
         """
-        Get or create a 'Miscellaneous' project for a user.
-        
-        This project is used for notes that don't match any specific project.
+        Get or create a miscellaneous project for a user.
         
         Args:
             user_id: The unique identifier of the user
             
         Returns:
-            The miscellaneous project as a dictionary
+            The miscellaneous project as a Project domain model
         """
         try:
-            # Try to find an existing Miscellaneous project
-            response = self.dynamodb_client.scan(
+            # Scan for Miscellaneous project
+            items = self.dynamodb_client.scan(
                 table_name=self.table_name,
-                filter_expression="user_id = :user_id AND #n = :name",
-                expression_attribute_names={
-                    "#n": "name"
-                },
-                expression_attribute_values={
-                    ":user_id": user_id,
-                    ":name": "Miscellaneous"
-                }
+                filter_expression="user_id = :user_id AND #name = :name",
+                expression_attribute_names={"#name": "name"},
+                expression_attribute_values={":user_id": user_id, ":name": "Miscellaneous"}
             )
             
-            items = response.get('Items', [])
-            
+            # If found, return the first one
             if items:
-                return items[0]
+                return self._dict_to_project(items[0])
             
-            # Create a new Miscellaneous project
-            project_data = ProjectCreate(
-                name="Miscellaneous",
-                description="Automatically created for notes that don't match any specific project",
-                user_id=user_id
-            )
+            # Otherwise, create a new one
+            misc_project = {
+                "id": str(uuid.uuid4()),
+                "name": "Miscellaneous",
+                "description": "Default project for uncategorized notes",
+                "user_id": user_id,
+                "created_at": datetime.utcnow().isoformat()
+            }
             
-            # Convert to dictionary and create
-            project_dict = project_data.dict()
-            return await self.create(project_dict)
+            # Save to DynamoDB
+            self.dynamodb_client.put_item(table_name=self.table_name, item=misc_project)
+            
+            return self._dict_to_project(misc_project)
         except Exception as e:
-            logger.error(f"Error getting/creating misc project for user {user_id}: {str(e)}")
+            logger.error(f"Error getting or creating miscellaneous project: {str(e)}")
             raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
     
     async def delete_project_with_descendants(self, project_id: str) -> Dict:

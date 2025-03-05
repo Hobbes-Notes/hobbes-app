@@ -41,10 +41,7 @@ class UserService:
         Returns:
             User object if found, None otherwise
         """
-        user_data = await self.user_repository.get_user(user_id)
-        if user_data:
-            return User(**user_data)
-        return None
+        return await self.user_repository.get_user(user_id)
     
     async def create_user(self, user_data: Dict) -> User:
         """
@@ -60,8 +57,7 @@ class UserService:
         if 'created_at' not in user_data:
             user_data['created_at'] = datetime.now().isoformat()
             
-        created_user = await self.user_repository.create_user(user_data)
-        return User(**created_user)
+        return await self.user_repository.create_user(user_data)
     
     async def update_user(self, user_id: str, user_data: Dict) -> User:
         """
@@ -74,5 +70,4 @@ class UserService:
         Returns:
             The updated User object
         """
-        updated_user = await self.user_repository.update_user(user_id, user_data)
-        return User(**updated_user) 
+        return await self.user_repository.update_user(user_id, user_data) 

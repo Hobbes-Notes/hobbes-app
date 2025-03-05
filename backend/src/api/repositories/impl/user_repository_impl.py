@@ -8,6 +8,7 @@ import logging
 from typing import Optional, Dict
 
 from ..user_repository import UserRepository
+from ...models.user import User
 from infrastructure.dynamodb_client import get_dynamodb_client
 
 logger = logging.getLogger(__name__)
@@ -40,7 +41,21 @@ class UserRepositoryImpl(UserRepository):
             logger.error(f"Error creating user tables: {str(e)}")
             raise
     
-    async def get_user(self, user_id: str) -> Optional[Dict]:
+    def _dict_to_user(self, data: Dict) -> User:
+        """
+        Convert a dictionary to a User domain model.
+        
+        Args:
+            data: Dictionary containing user data
+            
+        Returns:
+            User domain model
+        """
+        if not data:
+            return None
+        return User(**data)
+    
+    async def get_user(self, user_id: str) -> Optional[User]:
         """
         Get a user by ID.
         
@@ -48,16 +63,16 @@ class UserRepositoryImpl(UserRepository):
             user_id: The user's ID
             
         Returns:
-            User data dictionary if found, None otherwise
+            User domain model if found, None otherwise
         """
         try:
             item = self.dynamodb_client.get_item(table_name='Users', key={'id': user_id})
-            return item
+            return self._dict_to_user(item)
         except Exception as e:
             logger.error(f"Error getting user {user_id}: {str(e)}")
             return None
     
-    async def create_user(self, user_data: Dict) -> Dict:
+    async def create_user(self, user_data: Dict) -> User:
         """
         Create a new user.
         
@@ -65,16 +80,16 @@ class UserRepositoryImpl(UserRepository):
             user_data: The user data to save
             
         Returns:
-            The created user data
+            The created User domain model
         """
         try:
             self.dynamodb_client.put_item(table_name='Users', item=user_data)
-            return user_data
+            return self._dict_to_user(user_data)
         except Exception as e:
             logger.error(f"Error creating user: {str(e)}")
             raise
     
-    async def update_user(self, user_id: str, user_data: Dict) -> Dict:
+    async def update_user(self, user_id: str, user_data: Dict) -> User:
         """
         Update a user.
         
@@ -83,7 +98,7 @@ class UserRepositoryImpl(UserRepository):
             user_data: The user data to update
             
         Returns:
-            The updated user data
+            The updated User domain model
         """
         try:
             # Remove id from update data as it's the key
@@ -100,11 +115,13 @@ class UserRepositoryImpl(UserRepository):
                 key={'id': user_id},
                 update_expression=update_expression,
                 expression_attribute_names=expression_attribute_names,
-                expression_attribute_values=expression_attribute_values
+                expression_attribute_values=expression_attribute_values,
+                return_values='ALL_NEW'
             )
             
-            # Get updated item
-            return await self.get_user(user_id)
+            # Get the updated item
+            updated_item = self.dynamodb_client.get_item(table_name='Users', key={'id': user_id})
+            return self._dict_to_user(updated_item)
         except Exception as e:
             logger.error(f"Error updating user {user_id}: {str(e)}")
             raise 
