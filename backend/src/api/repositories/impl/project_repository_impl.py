@@ -273,7 +273,7 @@ class DynamoDBProjectRepository(ProjectRepository):
             logger.error(f"Error getting or creating miscellaneous project: {str(e)}")
             raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
     
-    async def delete_project_with_descendants(self, project_id: str) -> Dict:
+    async def delete_project_with_descendants(self, project_id: str) -> Project:
         """
         Delete a project and all its descendants.
         
@@ -281,7 +281,7 @@ class DynamoDBProjectRepository(ProjectRepository):
             project_id: The unique identifier of the project
             
         Returns:
-            A message indicating the result of the operation
+            The deleted Project domain model with additional metadata
         """
         try:
             # Get the project to delete
@@ -318,10 +318,13 @@ class DynamoDBProjectRepository(ProjectRepository):
             self.dynamodb_client.delete_item(table_name=self.table_name, key={'id': project_id})
             logger.info(f"Deleted project {project_id}")
             
-            # Return a success message
-            return {
-                "message": f"Project {project_id} and {len(descendant_ids)} descendant projects deleted successfully"
-            }
+            # Add metadata to the project
+            project_dict = project.dict()
+            project_dict["deleted_descendants_count"] = len(descendant_ids)
+            project_dict["message"] = f"Project {project_id} and {len(descendant_ids)} descendant projects deleted successfully"
+            
+            # Return the project domain model
+            return Project(**project_dict)
         except HTTPException as e:
             # Re-raise HTTP exceptions
             raise e

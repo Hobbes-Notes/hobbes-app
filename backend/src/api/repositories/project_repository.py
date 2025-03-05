@@ -96,7 +96,7 @@ class ProjectRepository(ABC):
         pass
     
     @abstractmethod
-    async def delete_project_with_descendants(self, project_id: str) -> Dict:
+    async def delete_project_with_descendants(self, project_id: str) -> Project:
         """
         Delete a project and all its descendants.
         
@@ -104,6 +104,6 @@ class ProjectRepository(ABC):
             project_id: The unique identifier of the project
             
         Returns:
-            A message indicating the result of the operation
+            The deleted Project domain model with additional metadata
         """
         pass 
