@@ -7,11 +7,13 @@ This package provides implementations of the repository interfaces.
 from .project_repository_impl import DynamoDBProjectRepository
 from .note_repository_impl import DynamoDBNoteRepository
 from .user_repository_impl import UserRepositoryImpl
+from ...services.ai_service import AIService
 
 # Singleton instances
 _project_repository = None
 _note_repository = None
 _user_repository = None
+_ai_service = None
 
 def get_project_repository():
     """
@@ -48,3 +50,9 @@ def get_user_repository():
     if _user_repository is None:
         _user_repository = UserRepositoryImpl()
     return _user_repository
+
+def get_ai_service():
+    global _ai_service
+    if _ai_service is None:
+        _ai_service = AIService()
+    return _ai_service

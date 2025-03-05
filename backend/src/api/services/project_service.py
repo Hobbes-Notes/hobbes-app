@@ -13,6 +13,7 @@ from litellm import completion
 from ..models.project import Project, ProjectCreate, ProjectUpdate
 from ..repositories.project_repository import ProjectRepository
 from ..repositories.impl import get_project_repository
+from ..services.ai_service import AIService
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -25,15 +26,18 @@ class ProjectService:
     creation, retrieval, updating, and deletion of projects.
     """
     
-    def __init__(self, project_repository: Optional[ProjectRepository] = None):
+    def __init__(self, project_repository: Optional[ProjectRepository] = None, ai_service: Optional[AIService] = None):
         """
         Initialize the ProjectService with a project repository.
         
         Args:
             project_repository: Optional ProjectRepository instance. If not provided,
                                 a new instance will be created.
+            ai_service: Optional AIService instance. If not provided,
+                        a new instance will be created.
         """
         self.project_repository = project_repository or get_project_repository()
+        self.ai_service = ai_service or AIService()
     
     async def get_project(self, project_id: str) -> Project:
         """
@@ -150,60 +154,8 @@ class ProjectService:
             logger.error(f"Error getting or creating miscellaneous project: {str(e)}")
             raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
     
-    async def generate_project_summary(self, project: Project, new_note_content: str) -> str:
-        """
-        Generate a project summary based on its current summary and a new note.
-        
-        Args:
-            project: The project to generate summary for
-            new_note_content: The content of the new note
-            
-        Returns:
-            The generated summary as a string
-        """
-        try:
-            # Convert project to dict if it's a domain model
-            if hasattr(project, 'dict'):
-                project_dict = project.dict()
-            else:
-                project_dict = dict(project)
-                
-            # Get current summary
-            current_summary = project_dict.get('summary', '')
-            
-            # Generate a prompt for the AI
-            prompt = f"""
-            You are an AI assistant that helps summarize project notes.
-            
-            Project name: {project_dict['name']}
-            Project description: {project_dict.get('description', '')}
-            Current project summary: {current_summary}
-            
-            New note content:
-            {new_note_content}
-            
-            Based on the new note and the current summary, create an updated summary for this project.
-            The summary should include:
-            1. Learning Goals - What the user wants to learn or achieve
-            2. Next Steps - Concrete actions the user can take
-            
-            Format the summary with markdown headings (## for main sections).
-            Keep it concise (max 250 words) and focused on actionable insights.
-            """
-            
-            # Call the AI to generate a summary
-            response = completion(
-                model="gpt-3.5-turbo",
-                messages=[{"role": "system", "content": prompt}],
-                max_tokens=500
-            )
-            
-            # Extract and return the summary
-            return response.choices[0].message.content.strip()
-        except Exception as e:
-            logger.error(f"Error generating project summary: {str(e)}")
-            # Return the current summary if there's an error
-            return current_summary
+    # The generate_project_summary method has been moved to AIService.
+    # The create_note method now directly calls AIService.generate_project_summary.
     
     # The update_project_summary method has been removed as it's no longer needed.
     # The create_note method now directly calls generate_project_summary and update_project. 
