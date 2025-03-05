@@ -1,10 +1,3 @@
-"""
-User Controller Layer
-
-This module provides controller-level functionality for user routes,
-handling HTTP requests and responses for user operations.
-"""
-
 from fastapi import APIRouter, Depends, HTTPException, status
 from typing import List
 
@@ -24,15 +17,6 @@ def get_user_service() -> UserService:
 
 @router.get("/users/me", response_model=User)
 async def get_current_user_profile(current_user: User = Depends(get_current_user)):
-    """
-    Get current user profile
-    
-    Args:
-        current_user: The authenticated user
-        
-    Returns:
-        User object
-    """
     return current_user
 
 @router.patch("/users/me", response_model=User)
@@ -41,17 +25,6 @@ async def update_current_user(
     current_user: User = Depends(get_current_user),
     user_service: UserService = Depends(get_user_service)
 ):
-    """
-    Update current user profile
-    
-    Args:
-        user_data: The user data to update
-        current_user: The authenticated user
-        user_service: The user service dependency
-        
-    Returns:
-        Updated User object
-    """
     try:
         updated_user = await user_service.update_user(current_user.id, user_data)
         return updated_user
