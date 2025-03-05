@@ -139,7 +139,7 @@ class ProjectService:
                 return misc_project
             
             # Otherwise, create a new one
-            from backend.src.api.models.project import ProjectCreate
+            from ..models.project import ProjectCreate
             
             misc_project_data = ProjectCreate(
                 name="Miscellaneous",
