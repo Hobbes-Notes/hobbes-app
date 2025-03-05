@@ -6,13 +6,20 @@ data access operations for the application.
 """
 
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List, Optional, TypeVar, Generic
+from typing import Any, Dict, List, Optional, TypeVar, Generic, Type
 
-T = TypeVar('T')
+T = TypeVar('T')  # Entity type
+C = TypeVar('C')  # Create type
+U = TypeVar('U')  # Update type
 
-class BaseRepository(ABC, Generic[T]):
+class BaseRepository(ABC, Generic[T, C, U]):
     """
     Base repository interface that defines common methods for data access.
+    
+    Type Parameters:
+        T: The entity type returned by the repository
+        C: The create model type used for creating entities
+        U: The update model type used for updating entities
     """
     
     @abstractmethod
@@ -29,12 +36,12 @@ class BaseRepository(ABC, Generic[T]):
         pass
     
     @abstractmethod
-    async def create(self, data: Dict) -> T:
+    async def create(self, data: C) -> T:
         """
         Create a new entity.
         
         Args:
-            data: The data for the new entity
+            data: The create model for the new entity
             
         Returns:
             The created entity
@@ -42,13 +49,13 @@ class BaseRepository(ABC, Generic[T]):
         pass
     
     @abstractmethod
-    async def update(self, id: str, data: Dict) -> Optional[T]:
+    async def update(self, id: str, data: U) -> Optional[T]:
         """
         Update an existing entity.
         
         Args:
             id: The unique identifier of the entity
-            data: The updated data
+            data: The update model with updated fields
             
         Returns:
             The updated entity if found, None otherwise

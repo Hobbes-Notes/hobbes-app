@@ -8,6 +8,10 @@ class NoteCreate(BaseModel):
     user_id: str
     project_id: Optional[str] = None
 
+class NoteUpdate(BaseModel):
+    content: Optional[str] = None
+    project_id: Optional[str] = None
+
 class Note(BaseModel):
     id: str
     content: str

@@ -11,6 +11,9 @@ from typing import Dict, List, Optional
 from fastapi import HTTPException
 
 from ...repositories.note_repository import NoteRepository
+from ...models.note import Note, NoteCreate, NoteUpdate
+from ...models.pagination import PaginatedResponse, PaginationParams
+from ...models.project import ProjectRef
 from infrastructure.dynamodb_client import get_dynamodb_client
 
 # Set up logging
@@ -122,7 +125,43 @@ class DynamoDBNoteRepository(NoteRepository):
         else:
             logger.info(f"{self.project_notes_table_name} table already exists")
     
-    async def get_by_id(self, id: str) -> Optional[Dict]:
+    def _dict_to_note(self, data: Dict) -> Note:
+        """
+        Convert a dictionary to a Note model.
+        
+        Args:
+            data: Dictionary containing note data
+            
+        Returns:
+            Note model
+        """
+        return Note(**data)
+    
+    def _note_to_dict(self, note: Note) -> Dict:
+        """
+        Convert a Note model to a dictionary.
+        
+        Args:
+            note: Note model
+            
+        Returns:
+            Dictionary representation of the note
+        """
+        return note.dict()
+    
+    def _dict_to_project_ref(self, data: Dict) -> ProjectRef:
+        """
+        Convert a dictionary to a ProjectRef model.
+        
+        Args:
+            data: Dictionary containing project reference data
+            
+        Returns:
+            ProjectRef model
+        """
+        return ProjectRef(**data)
+    
+    async def get_by_id(self, id: str) -> Optional[Note]:
         """
         Get a note by its ID.
         
@@ -130,45 +169,55 @@ class DynamoDBNoteRepository(NoteRepository):
             id: The unique identifier of the note
             
         Returns:
-            The note data as a dictionary if found, None otherwise
+            The note if found, None otherwise
         """
         try:
             item = self.dynamodb_client.get_item(table_name=self.table_name, key={'id': id})
-            return item
+            if not item:
+                return None
+                
+            # Add project references
+            item['projects'] = await self.get_projects_for_note(id)
+            
+            return self._dict_to_note(item)
         except Exception as e:
             logger.error(f"Error getting note with ID {id}: {str(e)}")
             return None
     
-    async def create(self, data: Dict) -> Dict:
+    async def create(self, data: NoteCreate) -> Note:
         """
         Create a new note.
         
         Args:
-            data: The note data to create
+            data: The note data to create (NoteCreate object or dict)
             
         Returns:
-            The created note as a dictionary
+            The created note
         """
         try:
+            # Convert model to dict if it's not already a dict
+            if hasattr(data, 'dict'):
+                note_dict = data.dict()
+            else:
+                note_dict = dict(data)
+            
             # Generate a unique ID and timestamp if not provided
-            if 'id' not in data:
-                data['id'] = str(uuid.uuid4())
-            if 'created_at' not in data:
-                data['created_at'] = datetime.utcnow().isoformat()
+            note_dict['id'] = note_dict.get('id', str(uuid.uuid4()))
+            if 'created_at' not in note_dict:
+                note_dict['created_at'] = datetime.utcnow().isoformat()
             
             # Save to DynamoDB
-            self.dynamodb_client.put_item(table_name=self.table_name, item=data)
+            self.dynamodb_client.put_item(table_name=self.table_name, item=note_dict)
             
             # Initialize projects list if not present
-            if 'projects' not in data:
-                data['projects'] = []
+            note_dict['projects'] = note_dict.get('projects', [])
             
-            return data
+            return self._dict_to_note(note_dict)
         except Exception as e:
             logger.error(f"Error creating note: {str(e)}")
             raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
     
-    async def update(self, id: str, data: Dict) -> Optional[Dict]:
+    async def update(self, id: str, data: NoteUpdate) -> Optional[Note]:
         """
         Update an existing note.
         
@@ -185,12 +234,15 @@ class DynamoDBNoteRepository(NoteRepository):
             if not note:
                 return None
             
+            # Convert model to dict
+            update_dict = data.dict(exclude_unset=True)
+            
             # Update the note
             update_expression = "set "
             expression_attribute_values = {}
             expression_attribute_names = {}
             
-            for key, value in data.items():
+            for key, value in update_dict.items():
                 if key != 'id' and key != 'projects':  # Don't update the ID or projects
                     update_expression += f"#{key} = :{key}, "
                     expression_attribute_values[f":{key}"] = value
@@ -209,12 +261,12 @@ class DynamoDBNoteRepository(NoteRepository):
                 return_values="ALL_NEW"
             )
             
-            updated_note = response.get('Attributes', {})
+            updated_note_dict = response.get('Attributes', {})
             
             # Add project references
-            updated_note['projects'] = await self.get_projects_for_note(id)
+            updated_note_dict['projects'] = await self.get_projects_for_note(id)
             
-            return updated_note
+            return self._dict_to_note(updated_note_dict)
         except Exception as e:
             logger.error(f"Error updating note {id}: {str(e)}")
             raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
@@ -259,7 +311,7 @@ class DynamoDBNoteRepository(NoteRepository):
             logger.error(f"Error deleting note {id}: {str(e)}")
             raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
     
-    async def get_projects_for_note(self, note_id: str) -> List[Dict]:
+    async def get_projects_for_note(self, note_id: str) -> List[ProjectRef]:
         """
         Get all projects associated with a note.
         
@@ -267,7 +319,7 @@ class DynamoDBNoteRepository(NoteRepository):
             note_id: The unique identifier of the note
             
         Returns:
-            List of project reference dictionaries (id and name)
+            List of project references
         """
         try:
             # Query the ProjectNotes table for associations
@@ -285,10 +337,11 @@ class DynamoDBNoteRepository(NoteRepository):
                     key={'id': item['project_id']}
                 )
                 if project:
-                    project_refs.append({
+                    project_ref_dict = {
                         'id': project['id'],
                         'name': project['name']
-                    })
+                    }
+                    project_refs.append(self._dict_to_project_ref(project_ref_dict))
             
             return project_refs
         except Exception as e:
@@ -318,20 +371,22 @@ class DynamoDBNoteRepository(NoteRepository):
             logger.error(f"Error associating note {note_id} with project {project_id}: {str(e)}")
             raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
     
-    async def get_notes_by_project(self, project_id: str, page: int = 1, page_size: int = 10, exclusive_start_key: Optional[Dict] = None) -> Dict:
+    async def get_notes_by_project(self, project_id: str, pagination: PaginationParams) -> PaginatedResponse[Note]:
         """
         Get paginated notes for a specific project.
         
         Args:
             project_id: The unique identifier of the project
-            page: The page number (1-indexed)
-            page_size: The number of items per page
-            exclusive_start_key: The key to start from for pagination
+            pagination: Pagination parameters
             
         Returns:
-            Dictionary with paginated notes and pagination metadata
+            Paginated response containing Note objects and pagination metadata
         """
         try:
+            page = pagination.page
+            page_size = pagination.page_size
+            exclusive_start_key = pagination.exclusive_start_key
+            
             # Query the ProjectNotes table for the project
             if exclusive_start_key:
                 response = self.dynamodb_client.query(
@@ -354,43 +409,43 @@ class DynamoDBNoteRepository(NoteRepository):
             # Get the notes for each project-note association
             notes = []
             for item in response.get('Items', []):
-                note = self.dynamodb_client.get_item(
+                note_dict = self.dynamodb_client.get_item(
                     table_name=self.table_name, 
                     key={'id': item['note_id']}
                 )
-                if note:
+                if note_dict:
                     # Add project references
-                    note['projects'] = await self.get_projects_for_note(note['id'])
-                    notes.append(note)
+                    note_dict['projects'] = await self.get_projects_for_note(note_dict['id'])
+                    notes.append(self._dict_to_note(note_dict))
             
             # Prepare the response
-            result = {
-                'items': notes,
-                'page': page,
-                'page_size': page_size,
-                'has_more': 'LastEvaluatedKey' in response,
-                'LastEvaluatedKey': response.get('LastEvaluatedKey')
-            }
-            
-            return result
+            return PaginatedResponse[Note](
+                items=notes,
+                page=page,
+                page_size=page_size,
+                has_more='LastEvaluatedKey' in response,
+                last_evaluated_key=response.get('LastEvaluatedKey')
+            )
         except Exception as e:
             logger.error(f"Error getting notes for project {project_id}: {str(e)}")
             raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
     
-    async def get_notes_by_user(self, user_id: str, page: int = 1, page_size: int = 10, exclusive_start_key: Optional[Dict] = None) -> Dict:
+    async def get_notes_by_user(self, user_id: str, pagination: PaginationParams) -> PaginatedResponse[Note]:
         """
         Get paginated notes for a specific user.
         
         Args:
             user_id: The unique identifier of the user
-            page: The page number (1-indexed)
-            page_size: The number of items per page
-            exclusive_start_key: The key to start from for pagination
+            pagination: Pagination parameters
             
         Returns:
-            Dictionary with paginated notes and pagination metadata
+            Paginated response containing Note objects and pagination metadata
         """
         try:
+            page = pagination.page
+            page_size = pagination.page_size
+            exclusive_start_key = pagination.exclusive_start_key
+            
             # Query the Notes table for the user
             if exclusive_start_key:
                 response = self.dynamodb_client.query(
@@ -414,20 +469,18 @@ class DynamoDBNoteRepository(NoteRepository):
             
             # Add project references to each note
             notes = []
-            for note in response.get('Items', []):
-                note['projects'] = await self.get_projects_for_note(note['id'])
-                notes.append(note)
+            for note_dict in response.get('Items', []):
+                note_dict['projects'] = await self.get_projects_for_note(note_dict['id'])
+                notes.append(self._dict_to_note(note_dict))
             
             # Prepare the response
-            result = {
-                'items': notes,
-                'page': page,
-                'page_size': page_size,
-                'has_more': 'LastEvaluatedKey' in response,
-                'LastEvaluatedKey': response.get('LastEvaluatedKey')
-            }
-            
-            return result
+            return PaginatedResponse[Note](
+                items=notes,
+                page=page,
+                page_size=page_size,
+                has_more='LastEvaluatedKey' in response,
+                last_evaluated_key=response.get('LastEvaluatedKey')
+            )
         except Exception as e:
             logger.error(f"Error getting notes for user {user_id}: {str(e)}")
             raise HTTPException(status_code=500, detail=f"Database error: {str(e)}") 
