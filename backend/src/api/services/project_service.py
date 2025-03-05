@@ -35,7 +35,7 @@ class ProjectService:
         """
         self.project_repository = project_repository or get_project_repository()
     
-    async def get_project(self, project_id: str) -> Dict:
+    async def get_project(self, project_id: str) -> Project:
         """
         Get a project by its ID.
         
@@ -43,7 +43,7 @@ class ProjectService:
             project_id: The unique identifier of the project
             
         Returns:
-            The project data as a dictionary
+            The project as a Project domain model
             
         Raises:
             HTTPException: If the project is not found
@@ -55,7 +55,7 @@ class ProjectService:
             
         return project
     
-    async def get_projects(self, user_id: str) -> List[Dict]:
+    async def get_projects(self, user_id: str) -> List[Project]:
         """
         Get all projects for a user.
         
@@ -63,11 +63,11 @@ class ProjectService:
             user_id: The unique identifier of the user
             
         Returns:
-            List of project dictionaries
+            List of Project domain models
         """
         return await self.project_repository.get_projects_by_user(user_id)
     
-    async def create_project(self, project_data: ProjectCreate) -> Dict:
+    async def create_project(self, project_data: ProjectCreate) -> Project:
         """
         Create a new project.
         
@@ -75,7 +75,7 @@ class ProjectService:
             project_data: The project data to create
             
         Returns:
-            The created project as a dictionary
+            The created project as a Project domain model
         """
         # Convert to dictionary
         project_dict = project_data.dict()
@@ -83,7 +83,7 @@ class ProjectService:
         # Create the project
         return await self.project_repository.create(project_dict)
     
-    async def update_project(self, project_id: str, project_update: ProjectUpdate) -> Dict:
+    async def update_project(self, project_id: str, project_update: ProjectUpdate) -> Project:
         """
         Update an existing project.
         
@@ -92,7 +92,7 @@ class ProjectService:
             project_update: The project data to update
             
         Returns:
-            The updated project as a dictionary
+            The updated project as a Project domain model
             
         Raises:
             HTTPException: If the project is not found
@@ -120,70 +120,75 @@ class ProjectService:
         """
         return await self.project_repository.delete_project_with_descendants(project_id)
     
-    async def get_or_create_misc_project(self, user_id: str) -> Dict:
+    async def get_or_create_misc_project(self, user_id: str) -> Project:
         """
-        Get or create a 'Miscellaneous' project for a user.
-        
-        This project is used for notes that don't match any specific project.
+        Get or create a miscellaneous project for a user.
         
         Args:
             user_id: The unique identifier of the user
             
         Returns:
-            The miscellaneous project as a dictionary
+            The miscellaneous project as a Project domain model
         """
         return await self.project_repository.get_or_create_misc_project(user_id)
     
-    async def update_project_summary(self, project: Dict, new_note_content: str) -> Dict:
+    async def update_project_summary(self, project: Project, new_note_content: str) -> Project:
         """
-        Update a project's summary based on new note content.
+        Update a project's summary based on its notes.
         
         Args:
             project: The project to update
             new_note_content: The content of the new note
             
         Returns:
-            The updated project as a dictionary
+            The updated project as a Project domain model
         """
         try:
-            # Get the current summary or initialize it
-            current_summary = project.get('summary', '')
+            # Convert project to dict if it's a domain model
+            if hasattr(project, 'dict'):
+                project_dict = project.dict()
+            else:
+                project_dict = dict(project)
+                
+            # Get current summary
+            current_summary = project_dict.get('summary', '')
             
-            # Use AI to generate a new summary
+            # Generate a prompt for the AI
             prompt = f"""
-            You are an AI assistant that helps organize and summarize project notes.
+            You are an AI assistant that helps summarize project notes.
             
-            Project name: {project['name']}
-            Current project summary:
-            {current_summary}
+            Project name: {project_dict['name']}
+            Project description: {project_dict.get('description', '')}
+            Current project summary: {current_summary}
             
             New note content:
             {new_note_content}
             
-            Based on the new note content and the current summary, please create an updated summary for this project.
-            The summary should be in Markdown format with sections for:
-            1. Learning Goals (if applicable)
-            2. Next Steps
+            Based on the new note and the current summary, create an updated summary for this project.
+            The summary should include:
+            1. Learning Goals - What the user wants to learn or achieve
+            2. Next Steps - Concrete actions the user can take
             
-            Keep the summary concise but comprehensive, focusing on actionable items and key insights.
+            Format the summary with markdown headings (## for main sections).
+            Keep it concise (max 250 words) and focused on actionable insights.
             """
             
+            # Call the AI to generate a summary
             response = completion(
                 model="gpt-3.5-turbo",
                 messages=[{"role": "system", "content": prompt}],
                 max_tokens=500
             )
             
+            # Extract the summary
             new_summary = response.choices[0].message.content.strip()
             
-            # Update the project with the new summary
-            project['summary'] = new_summary
-            
-            # Save the updated project
-            updated_project = await self.project_repository.update(project['id'], {'summary': new_summary})
-            
-            return updated_project
+            # Update the project
+            update_data = ProjectUpdate(summary=new_summary)
+            return await self.update_project(project_dict['id'], update_data)
         except Exception as e:
             logger.error(f"Error updating project summary: {str(e)}")
             # Return the original project if there's an error
-            return project 
+            if isinstance(project, Project):
+                return project
+            return Project(**project_dict) 

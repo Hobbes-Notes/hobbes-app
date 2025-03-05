@@ -22,6 +22,7 @@ class Note(BaseModel):
 class PaginatedNotes(PaginatedResponse):
     """Paginated response for notes listing."""
     items: List[Note]
+    LastEvaluatedKey: Optional[Dict] = None  # Override the base class field with camelCase for frontend
 
     class Config:
         json_schema_extra = {
