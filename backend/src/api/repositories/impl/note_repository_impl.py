@@ -11,7 +11,7 @@ from typing import Dict, List, Optional
 from fastapi import HTTPException
 
 from ...repositories.note_repository import NoteRepository
-from ...repositories.database_repository import DatabaseRepository
+from infrastructure.dynamodb_client import get_dynamodb_client
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -21,17 +21,106 @@ class DynamoDBNoteRepository(NoteRepository):
     DynamoDB implementation of the note repository interface.
     """
     
-    def __init__(self, database_repository: DatabaseRepository):
+    def __init__(self):
         """
-        Initialize the DynamoDBNoteRepository with a database repository.
+        Initialize the DynamoDBNoteRepository with a DynamoDB client.
+        """
+        self.dynamodb_client = get_dynamodb_client()
+        self.table_name = 'Notes'
+        self.project_notes_table_name = 'ProjectNotes'
+        self.projects_table_name = 'Projects'
         
-        Args:
-            database_repository: The database repository to use for data access
+        # Get table resources for convenience
+        self.notes_table = self.dynamodb_client.get_table_resource(self.table_name)
+        self.project_notes_table = self.dynamodb_client.get_table_resource(self.project_notes_table_name)
+        self.projects_table = self.dynamodb_client.get_table_resource(self.projects_table_name)
+    
+    async def create_table(self) -> None:
         """
-        self.database_repository = database_repository
-        self.notes_table = database_repository.get_table('Notes')
-        self.project_notes_table = database_repository.get_table('ProjectNotes')
-        self.projects_table = database_repository.get_table('Projects')
+        Create the Notes table if it doesn't exist.
+        """
+        if not self.dynamodb_client.table_exists(self.table_name):
+            logger.info(f"Creating {self.table_name} table...")
+            self.dynamodb_client.create_table(
+                table_name=self.table_name,
+                key_schema=[
+                    {'AttributeName': 'id', 'KeyType': 'HASH'}
+                ],
+                attribute_definitions=[
+                    {'AttributeName': 'id', 'AttributeType': 'S'},
+                    {'AttributeName': 'user_id', 'AttributeType': 'S'},
+                    {'AttributeName': 'created_at', 'AttributeType': 'S'}
+                ],
+                global_secondary_indexes=[
+                    {
+                        'IndexName': 'user_id-created_at-index',
+                        'KeySchema': [
+                            {'AttributeName': 'user_id', 'KeyType': 'HASH'},
+                            {'AttributeName': 'created_at', 'KeyType': 'RANGE'}
+                        ],
+                        'Projection': {
+                            'ProjectionType': 'ALL'
+                        },
+                        'ProvisionedThroughput': {
+                            'ReadCapacityUnits': 5,
+                            'WriteCapacityUnits': 5
+                        }
+                    }
+                ],
+                provisioned_throughput={
+                    'ReadCapacityUnits': 5,
+                    'WriteCapacityUnits': 5
+                }
+            )
+            logger.info(f"{self.table_name} table created successfully")
+            
+            # Wait for the table to be active
+            self.dynamodb_client.get_client().get_waiter('table_exists').wait(TableName=self.table_name)
+            logger.info(f"{self.table_name} table is now active")
+        else:
+            logger.info(f"{self.table_name} table already exists")
+
+        # Create ProjectNotes mapping table if it doesn't exist
+        if not self.dynamodb_client.table_exists(self.project_notes_table_name):
+            logger.info(f"Creating {self.project_notes_table_name} mapping table...")
+            self.dynamodb_client.create_table(
+                table_name=self.project_notes_table_name,
+                key_schema=[
+                    {'AttributeName': 'project_id', 'KeyType': 'HASH'},
+                    {'AttributeName': 'created_at', 'KeyType': 'RANGE'}
+                ],
+                attribute_definitions=[
+                    {'AttributeName': 'project_id', 'AttributeType': 'S'},
+                    {'AttributeName': 'created_at', 'AttributeType': 'S'},
+                    {'AttributeName': 'note_id', 'AttributeType': 'S'}
+                ],
+                global_secondary_indexes=[
+                    {
+                        'IndexName': 'note_id-index',
+                        'KeySchema': [
+                            {'AttributeName': 'note_id', 'KeyType': 'HASH'}
+                        ],
+                        'Projection': {
+                            'ProjectionType': 'ALL'
+                        },
+                        'ProvisionedThroughput': {
+                            'ReadCapacityUnits': 5,
+                            'WriteCapacityUnits': 5
+                        }
+                    }
+                ],
+                provisioned_throughput={
+                    'ReadCapacityUnits': 5,
+                    'WriteCapacityUnits': 5
+                }
+            )
+            logger.info(f"{self.project_notes_table_name} mapping table created successfully")
+            
+            # Wait for the table to be active
+            self.dynamodb_client.get_client().get_waiter('table_exists').wait(TableName=self.project_notes_table_name)
+            logger.info(f"{self.project_notes_table_name} table is now active")
+        else:
+            logger.info(f"{self.project_notes_table_name} table already exists")
     
     async def get_by_id(self, id: str) -> Optional[Dict]:
         """
@@ -44,20 +133,11 @@ class DynamoDBNoteRepository(NoteRepository):
             The note data as a dictionary if found, None otherwise
         """
         try:
-            response = self.notes_table.get_item(Key={'id': id})
-            
-            if 'Item' not in response:
-                return None
-            
-            note = response['Item']
-            
-            # Add project references
-            note['projects'] = await self.get_projects_for_note(note['id'])
-            
-            return note
+            item = self.dynamodb_client.get_item(table_name=self.table_name, key={'id': id})
+            return item
         except Exception as e:
-            logger.error(f"Error retrieving note {id}: {str(e)}")
-            raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+            logger.error(f"Error getting note with ID {id}: {str(e)}")
+            return None
     
     async def create(self, data: Dict) -> Dict:
         """
@@ -77,7 +157,7 @@ class DynamoDBNoteRepository(NoteRepository):
                 data['created_at'] = datetime.utcnow().isoformat()
             
             # Save to DynamoDB
-            self.notes_table.put_item(Item=data)
+            self.dynamodb_client.put_item(table_name=self.table_name, item=data)
             
             # Initialize projects list if not present
             if 'projects' not in data:
@@ -120,12 +200,13 @@ class DynamoDBNoteRepository(NoteRepository):
             update_expression = update_expression[:-2]
             
             # Update the item
-            response = self.notes_table.update_item(
-                Key={'id': id},
-                UpdateExpression=update_expression,
-                ExpressionAttributeValues=expression_attribute_values,
-                ExpressionAttributeNames=expression_attribute_names,
-                ReturnValues="ALL_NEW"
+            response = self.dynamodb_client.update_item(
+                table_name=self.table_name,
+                key={'id': id},
+                update_expression=update_expression,
+                expression_attribute_values=expression_attribute_values,
+                expression_attribute_names=expression_attribute_names,
+                return_values="ALL_NEW"
             )
             
             updated_note = response.get('Attributes', {})
@@ -155,17 +236,19 @@ class DynamoDBNoteRepository(NoteRepository):
                 return False
             
             # Delete the note
-            self.notes_table.delete_item(Key={'id': id})
+            self.dynamodb_client.delete_item(table_name=self.table_name, key={'id': id})
             
             # Delete project-note associations
-            response = self.project_notes_table.scan(
-                FilterExpression="note_id = :note_id",
-                ExpressionAttributeValues={":note_id": id}
+            response = self.dynamodb_client.scan(
+                table_name=self.project_notes_table_name,
+                filter_expression="note_id = :note_id",
+                expression_attribute_values={":note_id": id}
             )
             
             for item in response.get('Items', []):
-                self.project_notes_table.delete_item(
-                    Key={
+                self.dynamodb_client.delete_item(
+                    table_name=self.project_notes_table_name,
+                    key={
                         'project_id': item['project_id'],
                         'created_at': item['created_at']
                     }
@@ -188,17 +271,20 @@ class DynamoDBNoteRepository(NoteRepository):
         """
         try:
             # Query the ProjectNotes table for associations
-            response = self.project_notes_table.scan(
-                FilterExpression="note_id = :note_id",
-                ExpressionAttributeValues={":note_id": note_id}
+            response = self.dynamodb_client.scan(
+                table_name=self.project_notes_table_name,
+                filter_expression="note_id = :note_id",
+                expression_attribute_values={":note_id": note_id}
             )
             
             project_refs = []
             for item in response.get('Items', []):
                 # Get the project details
-                project_response = self.projects_table.get_item(Key={'id': item['project_id']})
-                if 'Item' in project_response:
-                    project = project_response['Item']
+                project = self.dynamodb_client.get_item(
+                    table_name=self.projects_table_name, 
+                    key={'id': item['project_id']}
+                )
+                if project:
                     project_refs.append({
                         'id': project['id'],
                         'name': project['name']
@@ -220,11 +306,14 @@ class DynamoDBNoteRepository(NoteRepository):
         """
         try:
             # Create project-note association
-            self.project_notes_table.put_item(Item={
-                'project_id': project_id,
-                'note_id': note_id,
-                'created_at': timestamp
-            })
+            self.dynamodb_client.put_item(
+                table_name=self.project_notes_table_name,
+                item={
+                    'project_id': project_id,
+                    'note_id': note_id,
+                    'created_at': timestamp
+                }
+            )
         except Exception as e:
             logger.error(f"Error associating note {note_id} with project {project_id}: {str(e)}")
             raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
@@ -245,27 +334,31 @@ class DynamoDBNoteRepository(NoteRepository):
         try:
             # Query the ProjectNotes table for the project
             if exclusive_start_key:
-                response = self.project_notes_table.query(
-                    KeyConditionExpression="project_id = :project_id",
-                    ExpressionAttributeValues={":project_id": project_id},
-                    ScanIndexForward=False,  # Sort by created_at in descending order
-                    Limit=page_size,
-                    ExclusiveStartKey=exclusive_start_key
+                response = self.dynamodb_client.query(
+                    table_name=self.project_notes_table_name,
+                    key_condition_expression="project_id = :project_id",
+                    expression_attribute_values={":project_id": project_id},
+                    scan_index_forward=False,  # Sort by created_at in descending order
+                    limit=page_size,
+                    exclusive_start_key=exclusive_start_key
                 )
             else:
-                response = self.project_notes_table.query(
-                    KeyConditionExpression="project_id = :project_id",
-                    ExpressionAttributeValues={":project_id": project_id},
-                    ScanIndexForward=False,  # Sort by created_at in descending order
-                    Limit=page_size
+                response = self.dynamodb_client.query(
+                    table_name=self.project_notes_table_name,
+                    key_condition_expression="project_id = :project_id",
+                    expression_attribute_values={":project_id": project_id},
+                    scan_index_forward=False,  # Sort by created_at in descending order
+                    limit=page_size
                 )
             
             # Get the notes for each project-note association
             notes = []
             for item in response.get('Items', []):
-                note_response = self.notes_table.get_item(Key={'id': item['note_id']})
-                if 'Item' in note_response:
-                    note = note_response['Item']
+                note = self.dynamodb_client.get_item(
+                    table_name=self.table_name, 
+                    key={'id': item['note_id']}
+                )
+                if note:
                     # Add project references
                     note['projects'] = await self.get_projects_for_note(note['id'])
                     notes.append(note)
@@ -300,21 +393,23 @@ class DynamoDBNoteRepository(NoteRepository):
         try:
             # Query the Notes table for the user
             if exclusive_start_key:
-                response = self.notes_table.query(
-                    IndexName='user_id-created_at-index',
-                    KeyConditionExpression="user_id = :user_id",
-                    ExpressionAttributeValues={":user_id": user_id},
-                    ScanIndexForward=False,  # Sort by created_at in descending order
-                    Limit=page_size,
-                    ExclusiveStartKey=exclusive_start_key
+                response = self.dynamodb_client.query(
+                    table_name=self.table_name,
+                    index_name='user_id-created_at-index',
+                    key_condition_expression="user_id = :user_id",
+                    expression_attribute_values={":user_id": user_id},
+                    scan_index_forward=False,  # Sort by created_at in descending order
+                    limit=page_size,
+                    exclusive_start_key=exclusive_start_key
                 )
             else:
-                response = self.notes_table.query(
-                    IndexName='user_id-created_at-index',
-                    KeyConditionExpression="user_id = :user_id",
-                    ExpressionAttributeValues={":user_id": user_id},
-                    ScanIndexForward=False,  # Sort by created_at in descending order
-                    Limit=page_size
+                response = self.dynamodb_client.query(
+                    table_name=self.table_name,
+                    index_name='user_id-created_at-index',
+                    key_condition_expression="user_id = :user_id",
+                    expression_attribute_values={":user_id": user_id},
+                    scan_index_forward=False,  # Sort by created_at in descending order
+                    limit=page_size
                 )
             
             # Add project references to each note

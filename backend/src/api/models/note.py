@@ -6,6 +6,7 @@ from .pagination import PaginatedResponse
 class NoteCreate(BaseModel):
     content: str
     user_id: str
+    project_id: Optional[str] = None
 
 class Note(BaseModel):
     id: str

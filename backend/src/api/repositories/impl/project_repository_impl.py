@@ -11,8 +11,7 @@ from typing import Dict, List, Optional
 from fastapi import HTTPException
 
 from ...repositories.project_repository import ProjectRepository
-from ...repositories.database_repository import DatabaseRepository
-from ...models.project import ProjectCreate
+from infrastructure.dynamodb_client import get_dynamodb_client
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -22,16 +21,42 @@ class DynamoDBProjectRepository(ProjectRepository):
     DynamoDB implementation of the project repository interface.
     """
     
-    def __init__(self, database_repository: DatabaseRepository):
+    def __init__(self):
         """
-        Initialize the DynamoDBProjectRepository with a database repository.
+        Initialize the DynamoDBProjectRepository with a DynamoDB client.
+        """
+        self.dynamodb_client = get_dynamodb_client()
+        self.table_name = 'Projects'
         
-        Args:
-            database_repository: The database repository to use for data access
+        # Get table resource for convenience
+        self.projects_table = self.dynamodb_client.get_table_resource(self.table_name)
+    
+    async def create_table(self) -> None:
         """
-        self.database_repository = database_repository
-        self.projects_table = database_repository.get_table('Projects')
-        self.project_notes_table = database_repository.get_table('ProjectNotes')
+        Create the Projects table if it doesn't exist.
+        """
+        if not self.dynamodb_client.table_exists(self.table_name):
+            logger.info(f"Creating {self.table_name} table...")
+            self.dynamodb_client.create_table(
+                table_name=self.table_name,
+                key_schema=[
+                    {'AttributeName': 'id', 'KeyType': 'HASH'}
+                ],
+                attribute_definitions=[
+                    {'AttributeName': 'id', 'AttributeType': 'S'}
+                ],
+                provisioned_throughput={
+                    'ReadCapacityUnits': 5,
+                    'WriteCapacityUnits': 5
+                }
+            )
+            logger.info(f"{self.table_name} table created successfully")
+            
+            # Wait for the table to be active
+            self.dynamodb_client.get_client().get_waiter('table_exists').wait(TableName=self.table_name)
+            logger.info(f"{self.table_name} table is now active")
+        else:
+            logger.info(f"{self.table_name} table already exists")
     
     async def get_by_id(self, id: str) -> Optional[Dict]:
         """
@@ -44,15 +69,11 @@ class DynamoDBProjectRepository(ProjectRepository):
             The project data as a dictionary if found, None otherwise
         """
         try:
-            response = self.projects_table.get_item(Key={'id': id})
-            
-            if 'Item' not in response:
-                return None
-                
-            return response['Item']
+            item = self.dynamodb_client.get_item(table_name=self.table_name, key={'id': id})
+            return item
         except Exception as e:
-            logger.error(f"Error retrieving project {id}: {str(e)}")
-            raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+            logger.error(f"Error getting project with ID {id}: {str(e)}")
+            return None
     
     async def create(self, data: Dict) -> Dict:
         """
@@ -72,7 +93,7 @@ class DynamoDBProjectRepository(ProjectRepository):
                 data['created_at'] = datetime.utcnow().isoformat()
             
             # Save to DynamoDB
-            self.projects_table.put_item(Item=data)
+            self.dynamodb_client.put_item(table_name=self.table_name, item=data)
             
             return data
         except Exception as e:
@@ -111,12 +132,13 @@ class DynamoDBProjectRepository(ProjectRepository):
             update_expression = update_expression[:-2]
             
             # Update the item
-            response = self.projects_table.update_item(
-                Key={'id': id},
-                UpdateExpression=update_expression,
-                ExpressionAttributeValues=expression_attribute_values,
-                ExpressionAttributeNames=expression_attribute_names,
-                ReturnValues="ALL_NEW"
+            response = self.dynamodb_client.update_item(
+                table_name=self.table_name,
+                key={'id': id},
+                update_expression=update_expression,
+                expression_attribute_values=expression_attribute_values,
+                expression_attribute_names=expression_attribute_names,
+                return_values="ALL_NEW"
             )
             
             return response.get('Attributes')
@@ -141,7 +163,7 @@ class DynamoDBProjectRepository(ProjectRepository):
                 return False
             
             # Delete the project
-            self.projects_table.delete_item(Key={'id': id})
+            self.dynamodb_client.delete_item(table_name=self.table_name, key={'id': id})
             
             return True
         except Exception as e:
@@ -160,9 +182,10 @@ class DynamoDBProjectRepository(ProjectRepository):
         """
         try:
             # Scan for projects with the given user_id
-            response = self.projects_table.scan(
-                FilterExpression="user_id = :user_id",
-                ExpressionAttributeValues={":user_id": user_id}
+            response = self.dynamodb_client.scan(
+                table_name=self.table_name,
+                filter_expression="user_id = :user_id",
+                expression_attribute_values={":user_id": user_id}
             )
             
             projects = response.get('Items', [])
@@ -189,12 +212,13 @@ class DynamoDBProjectRepository(ProjectRepository):
         """
         try:
             # Try to find an existing Miscellaneous project
-            response = self.projects_table.scan(
-                FilterExpression="user_id = :user_id AND #n = :name",
-                ExpressionAttributeNames={
+            response = self.dynamodb_client.scan(
+                table_name=self.table_name,
+                filter_expression="user_id = :user_id AND #n = :name",
+                expression_attribute_names={
                     "#n": "name"
                 },
-                ExpressionAttributeValues={
+                expression_attribute_values={
                     ":user_id": user_id,
                     ":name": "Miscellaneous"
                 }
@@ -240,9 +264,10 @@ class DynamoDBProjectRepository(ProjectRepository):
             
             def get_descendant_ids(parent_id):
                 # Scan for child projects
-                response = self.projects_table.scan(
-                    FilterExpression="parent_id = :parent_id",
-                    ExpressionAttributeValues={":parent_id": parent_id}
+                response = self.dynamodb_client.scan(
+                    table_name=self.table_name,
+                    filter_expression="parent_id = :parent_id",
+                    expression_attribute_values={":parent_id": parent_id}
                 )
                 
                 for child in response.get('Items', []):
@@ -256,11 +281,11 @@ class DynamoDBProjectRepository(ProjectRepository):
             
             # Delete all descendant projects
             for descendant_id in descendant_ids:
-                self.projects_table.delete_item(Key={'id': descendant_id})
+                self.dynamodb_client.delete_item(table_name=self.table_name, key={'id': descendant_id})
                 logger.info(f"Deleted descendant project {descendant_id}")
             
             # Delete the project itself
-            self.projects_table.delete_item(Key={'id': project_id})
+            self.dynamodb_client.delete_item(table_name=self.table_name, key={'id': project_id})
             logger.info(f"Deleted project {project_id}")
             
             # Return a success message
