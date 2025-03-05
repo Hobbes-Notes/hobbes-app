@@ -1,10 +1,3 @@
-"""
-Note Controller Layer
-
-This module provides controller-level functionality for note routes,
-handling HTTP requests and responses for note operations.
-"""
-
 from fastapi import APIRouter, HTTPException, Query, Depends
 from typing import List, Optional, Dict
 import json
@@ -15,13 +8,10 @@ from ..services.note_service import NoteService
 from ..services.project_service import ProjectService
 from ..repositories.impl import get_note_repository, get_project_repository
 
-# Set up logging
 logger = logging.getLogger(__name__)
 
-# Create router
 router = APIRouter()
 
-# Create services
 project_service = ProjectService()
 note_repository = get_note_repository()
 project_repository = get_project_repository()
@@ -31,7 +21,6 @@ note_service = NoteService(
     project_service=project_service
 )
 
-# Dependency to get services
 def get_note_service() -> NoteService:
     return note_service
 
@@ -40,16 +29,6 @@ async def create_note(
     note: NoteCreate,
     note_service: NoteService = Depends(get_note_service)
 ):
-    """
-    Create a new note.
-    
-    Args:
-        note: The note data to create
-        note_service: The note service dependency
-        
-    Returns:
-        The created note
-    """
     return await note_service.create_note(note)
 
 @router.get("/notes/{note_id}", response_model=Note)
@@ -57,16 +36,6 @@ async def get_note(
     note_id: str,
     note_service: NoteService = Depends(get_note_service)
 ):
-    """
-    Get a note by its ID.
-    
-    Args:
-        note_id: The unique identifier of the note
-        note_service: The note service dependency
-        
-    Returns:
-        The note data
-    """
     return await note_service.get_note(note_id)
 
 @router.get("/notes", response_model=PaginatedNotes)
@@ -78,21 +47,6 @@ async def list_notes(
     exclusive_start_key: Optional[str] = None,
     note_service: NoteService = Depends(get_note_service)
 ):
-    """
-    Get paginated notes by project or user.
-    
-    Args:
-        project_id: Optional project ID to filter notes
-        user_id: Optional user ID to filter notes
-        page: The page number (1-indexed)
-        page_size: The number of items per page
-        exclusive_start_key: Optional key for pagination
-        note_service: The note service dependency
-        
-    Returns:
-        Paginated notes with metadata
-    """
-    # Parse the exclusive_start_key if provided
     parsed_key = None
     if exclusive_start_key:
         try:
@@ -100,10 +54,9 @@ async def list_notes(
         except:
             raise HTTPException(status_code=400, detail="Invalid pagination key format")
     
-    # Get notes by project or by user
     if project_id:
         return await note_service.get_notes_by_project(project_id, page, page_size, parsed_key)
     elif user_id:
         return await note_service.get_notes_by_user(user_id, page, page_size, parsed_key)
     else:
-        raise HTTPException(status_code=400, detail="Either project_id or user_id must be provided") 
+        raise HTTPException(status_code=400, detail="Either project_id or user_id must be provided")
