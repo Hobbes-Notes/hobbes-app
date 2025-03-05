@@ -6,7 +6,7 @@ including CRUD operations and note-specific business logic.
 """
 
 import logging
-from typing import List, Optional, Dict
+from typing import List, Optional, Dict, Tuple
 from fastapi import HTTPException, Depends
 from datetime import datetime
 from litellm import completion
@@ -18,6 +18,7 @@ from ..models.pagination import PaginationParams
 from ..services.project_service import ProjectService
 from ..models.project import Project, ProjectRef, ProjectUpdate
 from ..services.ai_service import AIService
+from ..models.ai import RelevanceExtraction
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -90,57 +91,42 @@ class NoteService:
         return note
     
     async def create_note(self, note_data: NoteCreate) -> Note:
+        """
+        Create a new note and associate it with relevant projects.
+        
+        Args:
+            note_data: The note data to create
+            
+        Returns:
+            The created note as a Note domain model
+            
+        Raises:
+            HTTPException: If there's an error creating the note
+        """
         try:
-            # Validate that project_id is not provided
-            if getattr(note_data, 'project_id', None) is not None:
-                raise HTTPException(
-                    status_code=400, 
-                    detail="project_id should not be provided in create_note. Project associations are determined automatically."
-                )
-                
-            # Save to database - pass the NoteCreate object directly
+            # Validate input
+            self._validate_note_input(note_data)
+            
+            # Save to database
             note = await self.note_repository.create(note_data)
             
-            # Get all user's projects to check relevance
+            # Find relevant projects and extract content
             user_projects = await self.project_service.get_projects(note_data.user_id)
+            relevant_projects, project_extractions = await self._find_relevant_projects(
+                note_data.content, 
+                user_projects, 
+                note_data.user_id
+            )
             
-            # Check relevance for each project
-            relevant_projects = []
-            for project in user_projects:
-                is_relevant = await self.ai_service.check_project_relevance(note_data.content, project)
-                if is_relevant:
-                    relevant_projects.append(project)
+            # Associate note with projects
+            await self._associate_note_with_projects(note, relevant_projects)
             
-            # If no relevant projects found, use Miscellaneous project
-            if not relevant_projects:
-                misc_project = await self.project_service.get_or_create_misc_project(note_data.user_id)
-                relevant_projects.append(misc_project)
+            # Update project summaries
+            await self._update_project_summaries(relevant_projects, project_extractions)
             
-            # First, associate note with all relevant projects
-            for project in relevant_projects:
-                project_id = getattr(project, 'id', None)
-                await self.note_repository.associate_note_with_project(note.id, project_id, note.created_at)
+            # Create and return the note response
+            project_refs = self._create_project_references(relevant_projects)
             
-            # Then, generate summaries for all projects and update them
-            for project in relevant_projects:
-                # Generate the new summary
-                new_summary = await self.ai_service.generate_project_summary(project, note_data.content)
-                
-                # Create a ProjectUpdate object with the new summary
-                update_data = ProjectUpdate(summary=new_summary)
-                
-                # Update the project directly
-                await self.project_service.update_project(project.id, update_data)
-            
-            # Add project references to the note
-            project_refs = []
-            for p in relevant_projects:
-                if hasattr(p, 'id') and hasattr(p, 'name'):
-                    project_refs.append(ProjectRef(id=p.id, name=p.name))
-                elif isinstance(p, dict) and 'id' in p and 'name' in p:
-                    project_refs.append(ProjectRef(id=p['id'], name=p['name']))
-            
-            # Create a Note model with all the data
             return Note(
                 id=note.id,
                 content=note.content,
@@ -151,6 +137,158 @@ class NoteService:
         except Exception as e:
             logger.error(f"Error creating note: {str(e)}")
             raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+    
+    def _validate_note_input(self, note_data: NoteCreate) -> None:
+        """
+        Validate the note input data.
+        
+        Args:
+            note_data: The note data to validate
+            
+        Raises:
+            HTTPException: If the input is invalid
+        """
+        if getattr(note_data, 'project_id', None) is not None:
+            raise HTTPException(
+                status_code=400, 
+                detail="project_id should not be provided in create_note. Project associations are determined automatically."
+            )
+    
+    async def _find_relevant_projects(
+        self, 
+        content: str, 
+        user_projects: List[Project], 
+        user_id: str
+    ) -> Tuple[List[Project], Dict[str, RelevanceExtraction]]:
+        """
+        Find projects relevant to the note content and extract relevant content for each.
+        
+        Args:
+            content: The note content
+            user_projects: List of user's projects
+            user_id: The user ID
+            
+        Returns:
+            Tuple containing:
+            - List of relevant projects
+            - Dictionary mapping project IDs to RelevanceExtraction objects
+        """
+        relevant_projects = []
+        project_extractions = {}  # Dictionary to store project_id -> RelevanceExtraction
+        
+        # Check relevance for each project
+        for project in user_projects:
+            # Convert project to dict if it's a domain model
+            project_dict = self._convert_to_dict(project)
+            
+            # Prepare parameters for extraction
+            extraction_params = {
+                'content': content,
+                'project': project_dict,
+                'user_id': user_id
+            }
+            
+            # Extract relevant content
+            extraction_result = await self.ai_service.extract_relevant_note_for_project(extraction_params)
+            
+            if extraction_result.is_relevant:
+                relevant_projects.append(project)
+                project_id = getattr(project, 'id', None)
+                project_extractions[project_id] = extraction_result
+        
+        # If no relevant projects found, use Miscellaneous project
+        if not relevant_projects:
+            misc_project = await self.project_service.get_or_create_misc_project(user_id)
+            relevant_projects.append(misc_project)
+            
+            # For Miscellaneous project, create a basic RelevanceExtraction
+            project_id = getattr(misc_project, 'id', None)
+            project_extractions[project_id] = RelevanceExtraction(
+                is_relevant=True,
+                extracted_content=content
+            )
+        
+        return relevant_projects, project_extractions
+    
+    async def _associate_note_with_projects(self, note: Note, projects: List[Project]) -> None:
+        """
+        Associate a note with multiple projects.
+        
+        Args:
+            note: The note to associate
+            projects: The projects to associate with the note
+        """
+        for project in projects:
+            project_id = getattr(project, 'id', None)
+            await self.note_repository.associate_note_with_project(note.id, project_id, note.created_at)
+    
+    async def _update_project_summaries(
+        self, 
+        projects: List[Project], 
+        extractions: Dict[str, RelevanceExtraction]
+    ) -> None:
+        """
+        Update project summaries based on extracted note content.
+        
+        Args:
+            projects: The projects to update
+            extractions: Dictionary mapping project IDs to RelevanceExtraction objects
+        """
+        for project in projects:
+            project_id = getattr(project, 'id', None)
+            
+            # Convert project to dict if it's a domain model
+            project_dict = self._convert_to_dict(project)
+            
+            # Get the extraction result for this project
+            extraction = extractions.get(project_id)
+            
+            # Generate the new summary using the extracted content
+            new_summary = await self.ai_service.generate_project_summary(
+                project_dict, 
+                extraction.extracted_content
+            )
+            
+            # Create a ProjectUpdate object with the new summary
+            update_data = ProjectUpdate(summary=new_summary)
+            
+            # Update the project directly
+            await self.project_service.update_project(project.id, update_data)
+    
+    def _create_project_references(self, projects: List[Project]) -> List[ProjectRef]:
+        """
+        Create project references for the note response.
+        
+        Args:
+            projects: The projects to create references for
+            
+        Returns:
+            List of ProjectRef objects
+        """
+        project_refs = []
+        for p in projects:
+            if hasattr(p, 'id') and hasattr(p, 'name'):
+                project_refs.append(ProjectRef(id=p.id, name=p.name))
+            elif isinstance(p, dict) and 'id' in p and 'name' in p:
+                project_refs.append(ProjectRef(id=p['id'], name=p['name']))
+        return project_refs
+    
+    def _convert_to_dict(self, obj) -> Dict:
+        """
+        Convert an object to a dictionary.
+        
+        Args:
+            obj: The object to convert
+            
+        Returns:
+            Dictionary representation of the object
+        """
+        if hasattr(obj, 'dict'):
+            return obj.dict()
+        elif isinstance(obj, dict):
+            return obj
+        else:
+            return dict(obj)
     
     async def get_notes_by_project(self, project_id: str, page: int = 1, page_size: int = 10, exclusive_start_key: Optional[Dict] = None) -> PaginatedNotes:
         """
