@@ -16,7 +16,7 @@ from ..repositories.note_repository import NoteRepository
 from ..repositories.project_repository import ProjectRepository
 from ..models.pagination import PaginationParams
 from ..services.project_service import ProjectService
-from ..models.project import Project, ProjectRef
+from ..models.project import Project, ProjectRef, ProjectUpdate
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -115,11 +115,21 @@ class NoteService:
                 misc_project = await self.project_service.get_or_create_misc_project(note_data.user_id)
                 relevant_projects.append(misc_project)
             
-            # Associate note with all relevant projects and update summaries
+            # First, associate note with all relevant projects
             for project in relevant_projects:
                 project_id = getattr(project, 'id', None)
                 await self.note_repository.associate_note_with_project(note.id, project_id, note.created_at)
-                await self.project_service.update_project_summary(project, note_data.content)
+            
+            # Then, generate summaries for all projects and update them
+            for project in relevant_projects:
+                # Generate the new summary
+                new_summary = await self.project_service.generate_project_summary(project, note_data.content)
+                
+                # Create a ProjectUpdate object with the new summary
+                update_data = ProjectUpdate(summary=new_summary)
+                
+                # Update the project directly
+                await self.project_service.update_project(project.id, update_data)
             
             # Add project references to the note
             project_refs = []
