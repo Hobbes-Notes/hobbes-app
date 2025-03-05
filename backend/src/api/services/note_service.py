@@ -90,6 +90,13 @@ class NoteService:
     
     async def create_note(self, note_data: NoteCreate) -> Note:
         try:
+            # Validate that project_id is not provided
+            if getattr(note_data, 'project_id', None) is not None:
+                raise HTTPException(
+                    status_code=400, 
+                    detail="project_id should not be provided in create_note. Project associations are determined automatically."
+                )
+                
             # Save to database - pass the NoteCreate object directly
             note = await self.note_repository.create(note_data)
             
@@ -110,24 +117,14 @@ class NoteService:
                     # Update project summary
                     await self.project_service.update_project_summary(project, note_data.content)
             
-            # If no relevant projects found, associate with Miscellaneous project
-            if not relevant_projects and getattr(note_data, 'project_id', None) is None:
+            # Handle project associations based on relevance
+            if not relevant_projects:
+                # No relevant projects found - use Miscellaneous
                 misc_project = await self.project_service.get_or_create_misc_project(note_data.user_id)
-                misc_project_id = misc_project.id if hasattr(misc_project, 'id') else getattr(misc_project, 'id', None)
-                await self.note_repository.associate_note_with_project(note.id, misc_project_id, note.created_at)
-                # Update the Miscellaneous project summary
+                project_id = getattr(misc_project, 'id', None)
+                await self.note_repository.associate_note_with_project(note.id, project_id, note.created_at)
                 await self.project_service.update_project_summary(misc_project, note_data.content)
                 relevant_projects.append(misc_project)
-            # If project_id is provided, associate with that project
-            elif getattr(note_data, 'project_id', None) is not None:
-                project = await self.project_service.get_project(note_data.project_id)
-                if project:
-                    project_id = project.id if hasattr(project, 'id') else getattr(project, 'id', None)
-                    await self.note_repository.associate_note_with_project(note.id, project_id, note.created_at)
-                    # Update the project summary
-                    await self.project_service.update_project_summary(project, note_data.content)
-                    if project not in relevant_projects:
-                        relevant_projects.append(project)
             
             # Add project references to the note
             project_refs = []
