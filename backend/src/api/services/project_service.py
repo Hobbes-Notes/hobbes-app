@@ -139,8 +139,6 @@ class ProjectService:
                 return misc_project
             
             # Otherwise, create a new one
-            from ..models.project import ProjectCreate
-            
             misc_project_data = ProjectCreate(
                 name="Miscellaneous",
                 description="Default project for uncategorized notes",
@@ -152,16 +150,16 @@ class ProjectService:
             logger.error(f"Error getting or creating miscellaneous project: {str(e)}")
             raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
     
-    async def update_project_summary(self, project: Project, new_note_content: str) -> Project:
+    async def generate_project_summary(self, project: Project, new_note_content: str) -> str:
         """
-        Update a project's summary based on its notes.
+        Generate a project summary based on its current summary and a new note.
         
         Args:
-            project: The project to update
+            project: The project to generate summary for
             new_note_content: The content of the new note
             
         Returns:
-            The updated project as a Project domain model
+            The generated summary as a string
         """
         try:
             # Convert project to dict if it's a domain model
@@ -200,15 +198,12 @@ class ProjectService:
                 max_tokens=500
             )
             
-            # Extract the summary
-            new_summary = response.choices[0].message.content.strip()
-            
-            # Update the project
-            update_data = ProjectUpdate(summary=new_summary)
-            return await self.update_project(project_dict['id'], update_data)
+            # Extract and return the summary
+            return response.choices[0].message.content.strip()
         except Exception as e:
-            logger.error(f"Error updating project summary: {str(e)}")
-            # Return the original project if there's an error
-            if isinstance(project, Project):
-                return project
-            return Project(**project_dict) 
+            logger.error(f"Error generating project summary: {str(e)}")
+            # Return the current summary if there's an error
+            return current_summary
+    
+    # The update_project_summary method has been removed as it's no longer needed.
+    # The create_note method now directly calls generate_project_summary and update_project. 
