@@ -24,54 +24,17 @@ class BaseRepository(ABC, Generic[T, C, U]):
     
     @abstractmethod
     async def get_by_id(self, id: str) -> Optional[T]:
-        """
-        Get an entity by its ID.
-        
-        Args:
-            id: The unique identifier of the entity
-            
-        Returns:
-            The entity if found, None otherwise
-        """
         pass
     
     @abstractmethod
     async def create(self, data: C) -> T:
-        """
-        Create a new entity.
-        
-        Args:
-            data: The create model for the new entity
-            
-        Returns:
-            The created entity
-        """
         pass
     
     @abstractmethod
     async def update(self, id: str, data: U) -> Optional[T]:
-        """
-        Update an existing entity.
-        
-        Args:
-            id: The unique identifier of the entity
-            data: The update model with updated fields
-            
-        Returns:
-            The updated entity if found, None otherwise
-        """
         pass
     
     @abstractmethod
     async def delete(self, id: str) -> bool:
-        """
-        Delete an entity by its ID.
-        
-        Args:
-            id: The unique identifier of the entity
-            
-        Returns:
-            True if deleted, False otherwise
-        """
         pass
 
