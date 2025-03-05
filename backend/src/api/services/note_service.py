@@ -7,14 +7,15 @@ including CRUD operations and note-specific business logic.
 
 import logging
 from typing import List, Optional, Dict
-from fastapi import HTTPException
+from fastapi import HTTPException, Depends
 from datetime import datetime
 from litellm import completion
 
-from ..models.note import Note, NoteCreate
+from ..models.note import Note, NoteCreate, NoteUpdate
 from ..repositories.note_repository import NoteRepository
-from ..repositories.impl import get_note_repository
-from .project_service import ProjectService
+from ..repositories.project_repository import ProjectRepository
+from ..models.pagination import PaginationParams
+from ..services.project_service import ProjectService
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -27,18 +28,26 @@ class NoteService:
     creation, retrieval, and association with projects.
     """
     
-    def __init__(self, note_repository: Optional[NoteRepository] = None, project_service: Optional[ProjectService] = None):
+    def __init__(
+        self, 
+        note_repository: Optional[NoteRepository] = None,
+        project_repository: Optional[ProjectRepository] = None,
+        project_service: Optional[ProjectService] = None,
+        ai_service = None
+    ):
         """
-        Initialize the NoteService with dependencies.
+        Initialize the NoteService with repositories and services.
         
         Args:
-            note_repository: Optional NoteRepository instance. If not provided,
-                             a new instance will be created.
-            project_service: Optional ProjectService instance. If not provided,
-                             a new instance will be created.
+            note_repository: Repository for note operations
+            project_repository: Repository for project operations
+            project_service: Service for project operations
+            ai_service: Service for AI operations (optional)
         """
-        self.note_repository = note_repository or get_note_repository()
-        self.project_service = project_service or ProjectService()
+        self.note_repository = note_repository
+        self.project_repository = project_repository
+        self.project_service = project_service
+        self.ai_service = ai_service
     
     async def get_note(self, note_id: str) -> Dict:
         """
@@ -81,6 +90,9 @@ class NoteService:
             # Save to database
             note = await self.note_repository.create(note_dict)
             
+            # Convert note to dictionary
+            note_dict = dict(note)
+            
             # Get all user's projects to check relevance
             user_projects = await self.project_service.get_projects(note_data.user_id)
             
@@ -92,7 +104,7 @@ class NoteService:
                     relevant_projects.append(project)
                     
                     # Create project-note association
-                    await self.note_repository.associate_note_with_project(note['id'], project['id'], timestamp)
+                    await self.note_repository.associate_note_with_project(note_dict['id'], project['id'], timestamp)
                     
                     # Update project summary
                     await self.project_service.update_project_summary(project, note_data.content)
@@ -100,20 +112,20 @@ class NoteService:
             # If no relevant projects found, associate with Miscellaneous project
             if not relevant_projects and getattr(note_data, 'project_id', None) is None:
                 misc_project = await self.project_service.get_or_create_misc_project(note_data.user_id)
-                await self.note_repository.associate_note_with_project(note['id'], misc_project['id'], timestamp)
+                await self.note_repository.associate_note_with_project(note_dict['id'], misc_project['id'], timestamp)
                 relevant_projects.append(misc_project)
             # If project_id is provided, associate with that project
             elif getattr(note_data, 'project_id', None) is not None:
                 project = await self.project_service.get_project(note_data.project_id)
                 if project:
-                    await self.note_repository.associate_note_with_project(note['id'], project['id'], timestamp)
+                    await self.note_repository.associate_note_with_project(note_dict['id'], project['id'], timestamp)
                     if project not in relevant_projects:
                         relevant_projects.append(project)
             
             # Add project references to the note
-            note['projects'] = [{'id': p['id'], 'name': p['name']} for p in relevant_projects]
+            note_dict['projects'] = [{'id': p['id'], 'name': p['name']} for p in relevant_projects]
             
-            return note
+            return note_dict
         except Exception as e:
             logger.error(f"Error creating note: {str(e)}")
             raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
@@ -181,7 +193,16 @@ class NoteService:
         Returns:
             Dictionary with paginated notes and pagination metadata
         """
-        return await self.note_repository.get_notes_by_project(project_id, page, page_size, exclusive_start_key)
+        try:
+            pagination = PaginationParams(
+                page=page,
+                page_size=page_size,
+                exclusive_start_key=exclusive_start_key
+            )
+            return await self.note_repository.get_notes_by_project(project_id, pagination)
+        except Exception as e:
+            logger.error(f"Error getting notes for project {project_id}: {str(e)}")
+            raise HTTPException(status_code=500, detail=f"Error getting notes: {str(e)}")
     
     async def get_notes_by_user(self, user_id: str, page: int = 1, page_size: int = 10, exclusive_start_key: Optional[Dict] = None) -> Dict:
         """
@@ -196,4 +217,13 @@ class NoteService:
         Returns:
             Dictionary with paginated notes and pagination metadata
         """
-        return await self.note_repository.get_notes_by_user(user_id, page, page_size, exclusive_start_key) 
+        try:
+            pagination = PaginationParams(
+                page=page,
+                page_size=page_size,
+                exclusive_start_key=exclusive_start_key
+            )
+            return await self.note_repository.get_notes_by_user(user_id, pagination)
+        except Exception as e:
+            logger.error(f"Error getting notes for user {user_id}: {str(e)}")
+            raise HTTPException(status_code=500, detail=f"Error getting notes: {str(e)}") 

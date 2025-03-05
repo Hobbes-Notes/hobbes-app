@@ -13,6 +13,7 @@ import logging
 from ..models.note import Note, NoteCreate, PaginatedNotes
 from ..services.note_service import NoteService
 from ..services.project_service import ProjectService
+from ..repositories.impl import get_note_repository, get_project_repository
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -22,7 +23,13 @@ router = APIRouter()
 
 # Create services
 project_service = ProjectService()
-note_service = NoteService(project_service=project_service)
+note_repository = get_note_repository()
+project_repository = get_project_repository()
+note_service = NoteService(
+    note_repository=note_repository,
+    project_repository=project_repository,
+    project_service=project_service
+)
 
 # Dependency to get services
 def get_note_service() -> NoteService:
