@@ -33,18 +33,6 @@ class AuthService:
         """Initialize database tables required for auth operations."""
         await self.user_service.initialize_tables()
     
-    async def get_user_by_id(self, user_id: str) -> Optional[User]:
-        """
-        Get a user from the database by ID
-        
-        Args:
-            user_id: The user's ID
-            
-        Returns:
-            User object if found, None otherwise
-        """
-        return await self.user_service.get_user(user_id)
-    
     async def validate_google_token(self, token: str) -> Optional[User]:
         """
         Validate a Google OAuth token and get or create the user
@@ -72,7 +60,7 @@ class AuthService:
             user_id = userinfo['sub']
             
             # Check if user exists
-            user = await self.get_user_by_id(user_id)
+            user = await self.user_service.get_user(user_id)
             
             if not user:
                 # Create new user
@@ -108,7 +96,7 @@ class AuthService:
         """
         try:
             payload = verify_token(token)
-            user = await self.get_user_by_id(payload["sub"])
+            user = await self.user_service.get_user(payload["sub"])
             if user is None:
                 raise HTTPException(
                     status_code=status.HTTP_401_UNAUTHORIZED,
