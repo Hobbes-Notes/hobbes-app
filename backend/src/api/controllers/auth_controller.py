@@ -10,19 +10,30 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from typing import Dict, Optional
 
 from ..models.user import User
-from ..services.auth_service import validate_google_token, get_user_from_db
+from ..services.auth_service import AuthService
 from ..services.jwt_service import create_tokens, verify_token
 
 # Security setup
 security = HTTPBearer()
 router = APIRouter()
 
-async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)) -> User:
+# Create services
+auth_service = AuthService()
+
+# Dependency to get services
+def get_auth_service() -> AuthService:
+    return auth_service
+
+async def get_current_user(
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    auth_service: AuthService = Depends(get_auth_service)
+) -> User:
     """
     Get current user from JWT token
     
     Args:
         credentials: The HTTP Authorization credentials
+        auth_service: The auth service dependency
         
     Returns:
         User object if token is valid
@@ -30,31 +41,21 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
     Raises:
         HTTPException: If token is invalid or user not found
     """
-    try:
-        payload = verify_token(credentials.credentials)
-        user = get_user_from_db(payload["sub"])
-        if user is None:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="User not found"
-            )
-        return user
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Could not validate credentials"
-        )
+    return await auth_service.validate_token(credentials.credentials)
 
 @router.post("/google", response_model=Dict)
-async def google_auth(token: Dict[str, str] = Body(...), response: Response = None):
+async def google_auth(
+    token: Dict[str, str] = Body(...), 
+    response: Response = None,
+    auth_service: AuthService = Depends(get_auth_service)
+):
     """
     Handle Google OAuth authentication
     
     Args:
         token: Dictionary containing the Google OAuth token
         response: FastAPI Response object for setting cookies
+        auth_service: The auth service dependency
         
     Returns:
         Dictionary with access token and user data
@@ -68,7 +69,7 @@ async def google_auth(token: Dict[str, str] = Body(...), response: Response = No
             detail="Token is required"
         )
         
-    user = await validate_google_token(token['token'])
+    user = await auth_service.validate_google_token(token['token'])
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -99,13 +100,18 @@ async def google_auth(token: Dict[str, str] = Body(...), response: Response = No
     }
 
 @router.post("/refresh")
-async def refresh_token(request: Request, response: Response):
+async def refresh_token(
+    request: Request, 
+    response: Response,
+    auth_service: AuthService = Depends(get_auth_service)
+):
     """
     Refresh access token using refresh token from cookie
     
     Args:
         request: FastAPI Request object for accessing cookies
         response: FastAPI Response object for setting cookies
+        auth_service: The auth service dependency
         
     Returns:
         Dictionary with new access token
