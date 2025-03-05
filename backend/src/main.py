@@ -6,8 +6,7 @@ from api.controllers.auth_controller import router as auth_router
 from api.controllers.project_controller import router as project_router
 from api.controllers.note_controller import router as note_router
 from api.services.auth_service import create_user_tables
-from api.services.database_service import DatabaseService
-from api.repositories.impl import get_database_repository
+from api.repositories.impl import get_project_repository, get_note_repository
 
 # Configure logging
 logging.basicConfig(
@@ -32,14 +31,21 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Create database service
-database_service = DatabaseService()
-
 # Create DynamoDB tables if they don't exist
 @app.on_event("startup")
 async def startup_event():
-    await database_service.create_tables()
-    create_user_tables()
+    logger.info("Initializing application...")
+    
+    # Initialize repositories and create tables
+    project_repository = get_project_repository()
+    note_repository = get_note_repository()
+    
+    # Create tables
+    await project_repository.create_table()
+    await note_repository.create_table()
+    await create_user_tables()
+    
+    logger.info("Application initialized successfully")
 
 # Include routers
 app.include_router(auth_router, prefix="/auth", tags=["auth"])

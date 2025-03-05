@@ -6,7 +6,6 @@ including database operations and token validation.
 """
 
 import os
-import boto3
 import logging
 from datetime import datetime
 from typing import Optional
@@ -15,128 +14,102 @@ from fastapi import HTTPException, status
 
 from ..models.user import User
 from .jwt_service import verify_token
+from infrastructure.dynamodb_client import get_dynamodb_client
 
-# Initialize DynamoDB
-dynamodb = boto3.resource(
-    'dynamodb',
-    aws_access_key_id=os.getenv('AWS_ACCESS_KEY_ID'),
-    aws_secret_access_key=os.getenv('AWS_SECRET_ACCESS_KEY'),
-    region_name=os.getenv('AWS_REGION', 'us-west-2'),
-    endpoint_url=os.getenv('DYNAMODB_ENDPOINT', 'http://dynamodb-local:7777')
-)
+# Get DynamoDB client
+dynamodb_client = get_dynamodb_client()
 
 logger = logging.getLogger(__name__)
 
-def create_user_tables():
+async def create_user_tables():
     """
     Create Users table if it doesn't exist
     
     This function initializes the DynamoDB table structure for user data.
     """
     try:
-        existing_tables = [table.name for table in dynamodb.tables.all()]
-        
-        if 'Users' not in existing_tables:
-            dynamodb.create_table(
-                TableName='Users',
-                KeySchema=[{'AttributeName': 'id', 'KeyType': 'HASH'}],
-                AttributeDefinitions=[{'AttributeName': 'id', 'AttributeType': 'S'}],
-                ProvisionedThroughput={'ReadCapacityUnits': 5, 'WriteCapacityUnits': 5}
+        if not dynamodb_client.table_exists('Users'):
+            logger.info("Creating Users table...")
+            dynamodb_client.create_table(
+                table_name='Users',
+                key_schema=[{'AttributeName': 'id', 'KeyType': 'HASH'}],
+                attribute_definitions=[{'AttributeName': 'id', 'AttributeType': 'S'}],
+                provisioned_throughput={'ReadCapacityUnits': 5, 'WriteCapacityUnits': 5}
             )
             
-        # Wait for table to be active
-        dynamodb.Table('Users').wait_until_exists()
+            # Wait for table to be active
+            dynamodb_client.get_client().get_waiter('table_exists').wait(TableName='Users')
+            logger.info("Users table created successfully")
+        else:
+            logger.info("Users table already exists")
     except Exception as e:
-        logger.error(f"Error creating tables: {str(e)}")
+        logger.error(f"Error creating user tables: {str(e)}")
         raise
 
 def get_user_from_db(user_id: str) -> Optional[User]:
     """
-    Get user from database
+    Get a user from the database by ID
     
     Args:
-        user_id: The unique identifier for the user
+        user_id: The user's ID
         
     Returns:
         User object if found, None otherwise
-        
-    Raises:
-        HTTPException: If a database error occurs
     """
     try:
-        users_table = dynamodb.Table('Users')
-        response = users_table.get_item(Key={'id': user_id})
-        if 'Item' in response:
-            return User(**response['Item'])
+        item = dynamodb_client.get_item(table_name='Users', key={'id': user_id})
+        if item:
+            return User(**item)
         return None
     except Exception as e:
-        logger.error(f"Database error: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Database error occurred"
-        )
+        logger.error(f"Error getting user {user_id}: {str(e)}")
+        return None
 
 async def validate_google_token(token: str) -> Optional[User]:
     """
-    Validate Google token and return or create user
+    Validate a Google ID token and get or create the user
     
     Args:
-        token: The Google OAuth token to validate
+        token: The Google ID token
         
     Returns:
-        User object if token is valid
-        
-    Raises:
-        HTTPException: If token is invalid or a database error occurs
+        User object if valid, None otherwise
     """
     try:
-        # Get user info from Google
+        # Verify token with Google
         response = http_requests.get(
-            'https://www.googleapis.com/oauth2/v3/userinfo',
-            headers={'Authorization': f'Bearer {token}'}
+            f'https://oauth2.googleapis.com/tokeninfo?id_token={token}'
         )
         
         if response.status_code != 200:
-            raise ValueError("Invalid token")
+            logger.error(f"Invalid Google token: {response.text}")
+            return None
             
         userinfo = response.json()
         
         # Get user from database or create if not exists
-        users_table = dynamodb.Table('Users')
         user_id = userinfo['sub']
         
-        try:
-            response = users_table.get_item(Key={'id': user_id})
+        # Check if user exists
+        user = get_user_from_db(user_id)
+        
+        if not user:
+            # Create new user
+            user_data = {
+                'id': user_id,
+                'email': userinfo.get('email', ''),
+                'name': userinfo.get('name', ''),
+                'picture': userinfo.get('picture', ''),
+                'created_at': datetime.now().isoformat()
+            }
             
-            if 'Item' not in response:
-                # Create new user
-                user = {
-                    'id': user_id,
-                    'email': userinfo['email'],
-                    'name': userinfo['name'],
-                    'picture_url': userinfo.get('picture'),
-                    'created_at': datetime.utcnow().isoformat()
-                }
-                users_table.put_item(Item=user)
-            else:
-                user = response['Item']
+            # Save to database
+            dynamodb_client.put_item(table_name='Users', item=user_data)
             
-            return User(**user)
-        except Exception as e:
-            logger.error(f"Database error: {str(e)}")
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Database error occurred"
-            )
-            
-    except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=str(e),
-            headers={"WWW-Authenticate": "Bearer"},
-        )
+            user = User(**user_data)
+            logger.info(f"Created new user: {user.id}")
+        
+        return user
     except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="An unexpected error occurred"
-        ) 
+        logger.error(f"Error validating Google token: {str(e)}")
+        return None 

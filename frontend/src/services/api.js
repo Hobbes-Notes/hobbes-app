@@ -135,8 +135,12 @@ export const useApiService = () => {
       return api.get(`/notes/${id}`);
     }, [api]),
 
-    createNote: useCallback(async (content, user_id) => {
-      return api.post('/notes', { content, user_id });
+    createNote: useCallback(async (content, user_id, project_id = null) => {
+      const noteData = { content, user_id };
+      if (project_id) {
+        noteData.project_id = project_id;
+      }
+      return api.post('/notes', noteData);
     }, [api])
   };
 };
