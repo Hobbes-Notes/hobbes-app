@@ -109,22 +109,17 @@ class NoteService:
                 is_relevant = await self._check_project_relevance(note_data.content, project)
                 if is_relevant:
                     relevant_projects.append(project)
-                    
-                    # Create project-note association
-                    project_id = project.id if hasattr(project, 'id') else getattr(project, 'id', None)
-                    await self.note_repository.associate_note_with_project(note.id, project_id, note.created_at)
-                    
-                    # Update project summary
-                    await self.project_service.update_project_summary(project, note_data.content)
             
-            # Handle project associations based on relevance
+            # If no relevant projects found, use Miscellaneous project
             if not relevant_projects:
-                # No relevant projects found - use Miscellaneous
                 misc_project = await self.project_service.get_or_create_misc_project(note_data.user_id)
-                project_id = getattr(misc_project, 'id', None)
-                await self.note_repository.associate_note_with_project(note.id, project_id, note.created_at)
-                await self.project_service.update_project_summary(misc_project, note_data.content)
                 relevant_projects.append(misc_project)
+            
+            # Associate note with all relevant projects and update summaries
+            for project in relevant_projects:
+                project_id = getattr(project, 'id', None)
+                await self.note_repository.associate_note_with_project(note.id, project_id, note.created_at)
+                await self.project_service.update_project_summary(project, note_data.content)
             
             # Add project references to the note
             project_refs = []
