@@ -17,6 +17,7 @@ from ..repositories.project_repository import ProjectRepository
 from ..models.pagination import PaginationParams
 from ..services.project_service import ProjectService
 from ..models.project import Project, ProjectRef, ProjectUpdate
+from ..services.ai_service import AIService
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -34,7 +35,7 @@ class NoteService:
         note_repository: Optional[NoteRepository] = None,
         project_repository: Optional[ProjectRepository] = None,
         project_service: Optional[ProjectService] = None,
-        ai_service = None
+        ai_service: Optional[AIService] = None
     ):
         """
         Initialize the NoteService with repositories and services.
@@ -48,7 +49,7 @@ class NoteService:
         self.note_repository = note_repository
         self.project_repository = project_repository
         self.project_service = project_service
-        self.ai_service = ai_service
+        self.ai_service = ai_service or AIService()
     
     async def get_note(self, note_id: str) -> Note:
         """
@@ -106,7 +107,7 @@ class NoteService:
             # Check relevance for each project
             relevant_projects = []
             for project in user_projects:
-                is_relevant = await self._check_project_relevance(note_data.content, project)
+                is_relevant = await self.ai_service.check_project_relevance(note_data.content, project)
                 if is_relevant:
                     relevant_projects.append(project)
             
@@ -123,7 +124,7 @@ class NoteService:
             # Then, generate summaries for all projects and update them
             for project in relevant_projects:
                 # Generate the new summary
-                new_summary = await self.project_service.generate_project_summary(project, note_data.content)
+                new_summary = await self.ai_service.generate_project_summary(project, note_data.content)
                 
                 # Create a ProjectUpdate object with the new summary
                 update_data = ProjectUpdate(summary=new_summary)
@@ -150,61 +151,6 @@ class NoteService:
         except Exception as e:
             logger.error(f"Error creating note: {str(e)}")
             raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
-    
-    async def _check_project_relevance(self, content: str, project: Project) -> bool:
-        """
-        Check if a note's content is relevant to a project.
-        
-        Args:
-            content: The note content
-            project: The project to check relevance against
-            
-        Returns:
-            True if the note is relevant to the project, False otherwise
-        """
-        try:
-            # Skip relevance check for Miscellaneous project
-            if hasattr(project, 'name') and project.name == 'Miscellaneous':
-                return False
-                
-            # Get project attributes
-            project_name = project.name if hasattr(project, 'name') else "Unknown Project"
-            project_description = project.description if hasattr(project, 'description') else ""
-            project_summary = project.summary if hasattr(project, 'summary') else ""
-                
-            prompt = f"""
-            You are an AI assistant that helps categorize notes into relevant projects.
-            
-            Project name: {project_name}
-            Project description: {project_description}
-            Project summary: {project_summary}
-            
-            Note content:
-            {content}
-            
-            Is this note relevant to the project? Consider the following:
-            1. Does the note mention topics related to the project?
-            2. Does the note contain information that would be useful for the project?
-            3. Does the note describe actions or tasks related to the project?
-            
-            Answer with ONLY 'Yes' or 'No'.
-            """
-            
-            response = completion(
-                model="gpt-3.5-turbo",
-                messages=[{"role": "system", "content": prompt}],
-                max_tokens=10
-            )
-            
-            answer = response.choices[0].message.content.strip().lower()
-            is_relevant = answer.startswith('yes')
-            
-            logger.info(f"Relevance check result for project '{project_name}': {is_relevant}")
-            
-            return is_relevant
-        except Exception as e:
-            logger.error(f"Error checking project relevance: {str(e)}")
-            return False
     
     async def get_notes_by_project(self, project_id: str, page: int = 1, page_size: int = 10, exclusive_start_key: Optional[Dict] = None) -> PaginatedNotes:
         """
