@@ -108,7 +108,7 @@ class ProjectService:
             
         return updated_project
     
-    async def delete_project(self, project_id: str) -> Dict:
+    async def delete_project(self, project_id: str) -> Project:
         """
         Delete a project and all its child projects.
         
@@ -116,7 +116,7 @@ class ProjectService:
             project_id: The unique identifier of the project
             
         Returns:
-            A message indicating the result of the operation
+            The deleted Project domain model with additional metadata
         """
         return await self.project_repository.delete_project_with_descendants(project_id)
     
