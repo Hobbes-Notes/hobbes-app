@@ -130,7 +130,27 @@ class ProjectService:
         Returns:
             The miscellaneous project as a Project domain model
         """
-        return await self.project_repository.get_or_create_misc_project(user_id)
+        try:
+            # Try to get the Miscellaneous project by name
+            misc_project = await self.project_repository.get_by_name("Miscellaneous", user_id)
+            
+            # If found, return it
+            if misc_project:
+                return misc_project
+            
+            # Otherwise, create a new one
+            from backend.src.api.models.project import ProjectCreate
+            
+            misc_project_data = ProjectCreate(
+                name="Miscellaneous",
+                description="Default project for uncategorized notes",
+                user_id=user_id
+            )
+            
+            return await self.project_repository.create(misc_project_data)
+        except Exception as e:
+            logger.error(f"Error getting or creating miscellaneous project: {str(e)}")
+            raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
     
     async def update_project_summary(self, project: Project, new_note_content: str) -> Project:
         """

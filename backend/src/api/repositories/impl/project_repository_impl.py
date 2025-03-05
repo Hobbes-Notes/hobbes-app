@@ -45,7 +45,25 @@ class DynamoDBProjectRepository(ProjectRepository):
                     {'AttributeName': 'id', 'KeyType': 'HASH'}
                 ],
                 attribute_definitions=[
-                    {'AttributeName': 'id', 'AttributeType': 'S'}
+                    {'AttributeName': 'id', 'AttributeType': 'S'},
+                    {'AttributeName': 'name', 'AttributeType': 'S'},
+                    {'AttributeName': 'user_id', 'AttributeType': 'S'}
+                ],
+                global_secondary_indexes=[
+                    {
+                        'IndexName': 'name-user_id-index',
+                        'KeySchema': [
+                            {'AttributeName': 'name', 'KeyType': 'HASH'},
+                            {'AttributeName': 'user_id', 'KeyType': 'RANGE'}
+                        ],
+                        'Projection': {
+                            'ProjectionType': 'ALL'
+                        },
+                        'ProvisionedThroughput': {
+                            'ReadCapacityUnits': 5,
+                            'WriteCapacityUnits': 5
+                        }
+                    }
                 ],
                 provisioned_throughput={
                     'ReadCapacityUnits': 5,
@@ -59,6 +77,50 @@ class DynamoDBProjectRepository(ProjectRepository):
             logger.info(f"{self.table_name} table is now active")
         else:
             logger.info(f"{self.table_name} table already exists")
+            
+            # Check if the GSI exists and add it if it doesn't
+            try:
+                table_description = self.dynamodb_client.get_client().describe_table(TableName=self.table_name)
+                
+                # Check if the GSI exists
+                gsi_exists = False
+                if 'GlobalSecondaryIndexes' in table_description['Table']:
+                    for gsi in table_description['Table']['GlobalSecondaryIndexes']:
+                        if gsi['IndexName'] == 'name-user_id-index':
+                            gsi_exists = True
+                            break
+                
+                # If the GSI doesn't exist, add it
+                if not gsi_exists:
+                    logger.info(f"Adding name-user_id-index GSI to {self.table_name} table...")
+                    self.dynamodb_client.get_client().update_table(
+                        TableName=self.table_name,
+                        AttributeDefinitions=[
+                            {'AttributeName': 'name', 'AttributeType': 'S'},
+                            {'AttributeName': 'user_id', 'AttributeType': 'S'}
+                        ],
+                        GlobalSecondaryIndexUpdates=[
+                            {
+                                'Create': {
+                                    'IndexName': 'name-user_id-index',
+                                    'KeySchema': [
+                                        {'AttributeName': 'name', 'KeyType': 'HASH'},
+                                        {'AttributeName': 'user_id', 'KeyType': 'RANGE'}
+                                    ],
+                                    'Projection': {
+                                        'ProjectionType': 'ALL'
+                                    },
+                                    'ProvisionedThroughput': {
+                                        'ReadCapacityUnits': 5,
+                                        'WriteCapacityUnits': 5
+                                    }
+                                }
+                            }
+                        ]
+                    )
+                    logger.info(f"name-user_id-index GSI added successfully to {self.table_name} table")
+            except Exception as e:
+                logger.error(f"Error checking or adding GSI to {self.table_name} table: {str(e)}")
     
     def _dict_to_project(self, data: Dict) -> Optional[Project]:
         """
@@ -233,46 +295,6 @@ class DynamoDBProjectRepository(ProjectRepository):
             logger.error(f"Error getting projects for user {user_id}: {str(e)}")
             raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
     
-    async def get_or_create_misc_project(self, user_id: str) -> Project:
-        """
-        Get or create a miscellaneous project for a user.
-        
-        Args:
-            user_id: The unique identifier of the user
-            
-        Returns:
-            The miscellaneous project as a Project domain model
-        """
-        try:
-            # Scan for Miscellaneous project
-            items = self.dynamodb_client.scan(
-                table_name=self.table_name,
-                filter_expression="user_id = :user_id AND #name = :name",
-                expression_attribute_names={"#name": "name"},
-                expression_attribute_values={":user_id": user_id, ":name": "Miscellaneous"}
-            )
-            
-            # If found, return the first one
-            if items:
-                return self._dict_to_project(items[0])
-            
-            # Otherwise, create a new one
-            misc_project = {
-                "id": str(uuid.uuid4()),
-                "name": "Miscellaneous",
-                "description": "Default project for uncategorized notes",
-                "user_id": user_id,
-                "created_at": datetime.utcnow().isoformat()
-            }
-            
-            # Save to DynamoDB
-            self.dynamodb_client.put_item(table_name=self.table_name, item=misc_project)
-            
-            return self._dict_to_project(misc_project)
-        except Exception as e:
-            logger.error(f"Error getting or creating miscellaneous project: {str(e)}")
-            raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
-    
     async def delete_project_with_descendants(self, project_id: str) -> Project:
         """
         Delete a project and all its descendants.
@@ -330,4 +352,40 @@ class DynamoDBProjectRepository(ProjectRepository):
             raise e
         except Exception as e:
             logger.error(f"Error deleting project {project_id} with descendants: {str(e)}")
+            raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+    
+    async def get_by_name(self, name: str, user_id: str) -> Optional[Project]:
+        """
+        Get a project by its name and user ID.
+        
+        Args:
+            name: The name of the project
+            user_id: The user ID who owns the project
+            
+        Returns:
+            The project if found, None otherwise
+        """
+        try:
+            # Query the GSI for the project with the given name and user_id
+            response = self.dynamodb_client.query(
+                table_name=self.table_name,
+                index_name='name-user_id-index',
+                key_condition_expression="#n = :name AND user_id = :user_id",
+                expression_attribute_names={
+                    "#n": "name"
+                },
+                expression_attribute_values={
+                    ":name": name,
+                    ":user_id": user_id
+                }
+            )
+            
+            # Check if we found any items
+            if not response.get('Items'):
+                return None
+                
+            # Convert the first item to a Project domain model
+            return self._dict_to_project(response['Items'][0])
+        except Exception as e:
+            logger.error(f"Error getting project by name {name} for user {user_id}: {str(e)}")
             raise HTTPException(status_code=500, detail=f"Database error: {str(e)}") 
