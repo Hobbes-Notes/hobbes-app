@@ -87,9 +87,44 @@ export const useApi = () => {
   return api;
 };
 
+// Create an unauthenticated API client for AI configuration endpoints
+export const useUnauthenticatedApi = () => {
+  const { getUnauthenticatedApi } = useAuth();
+  const api = getUnauthenticatedApi();
+
+  // Request interceptor with correlation ID and timing
+  api.interceptors.request.use(
+    (config) => {
+      config.correlationId = generateCorrelationId();
+      config.requestTime = Date.now();
+      logRequest(config);
+      return config;
+    },
+    (error) => {
+      logError('Request Interceptor', error);
+      return Promise.reject(error);
+    }
+  );
+
+  // Response interceptor with timing and error handling
+  api.interceptors.response.use(
+    (response) => {
+      logResponse(response);
+      return response;
+    },
+    (error) => {
+      logError('Response Interceptor', error);
+      return Promise.reject(error);
+    }
+  );
+
+  return api;
+};
+
 // Export individual API functions that use the hook internally
 export const useApiService = () => {
   const api = useApi();
+  const unauthenticatedApi = useUnauthenticatedApi();
 
   return {
     // Projects
@@ -141,6 +176,31 @@ export const useApiService = () => {
         noteData.project_id = project_id;
       }
       return api.post('/notes', noteData);
-    }, [api])
+    }, [api]),
+
+    // AI Configurations (using unauthenticated API)
+    getAllAIConfigurations: useCallback(async (useCase) => {
+      return unauthenticatedApi.get(`/ai/configurations/${useCase}`);
+    }, [unauthenticatedApi]),
+
+    getActiveAIConfiguration: useCallback(async (useCase) => {
+      return unauthenticatedApi.get(`/ai/configurations/${useCase}/active`);
+    }, [unauthenticatedApi]),
+
+    getAIConfiguration: useCallback(async (useCase, version) => {
+      return unauthenticatedApi.get(`/ai/configurations/${useCase}/${version}`);
+    }, [unauthenticatedApi]),
+
+    createAIConfiguration: useCallback(async (configuration) => {
+      return unauthenticatedApi.post('/ai/configurations', configuration);
+    }, [unauthenticatedApi]),
+
+    setActiveAIConfiguration: useCallback(async (useCase, version) => {
+      return unauthenticatedApi.put(`/ai/configurations/${useCase}/${version}/activate`);
+    }, [unauthenticatedApi]),
+
+    deleteAIConfiguration: useCallback(async (useCase, version) => {
+      return unauthenticatedApi.delete(`/ai/configurations/${useCase}/${version}`);
+    }, [unauthenticatedApi])
   };
 };

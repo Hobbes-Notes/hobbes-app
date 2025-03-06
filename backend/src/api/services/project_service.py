@@ -12,7 +12,7 @@ from litellm import completion
 
 from ..models.project import Project, ProjectCreate, ProjectUpdate
 from ..repositories.project_repository import ProjectRepository
-from ..repositories.impl import get_project_repository
+from ..repositories.impl import get_project_repository, get_ai_service
 from ..services.ai_service import AIService
 
 # Set up logging
@@ -26,7 +26,11 @@ class ProjectService:
     creation, retrieval, updating, and deletion of projects.
     """
     
-    def __init__(self, project_repository: Optional[ProjectRepository] = None, ai_service: Optional[AIService] = None):
+    def __init__(
+        self, 
+        project_repository: Optional[ProjectRepository] = None, 
+        ai_service: Optional[AIService] = None
+    ):
         """
         Initialize the ProjectService with a project repository.
         
@@ -37,7 +41,7 @@ class ProjectService:
                         a new instance will be created.
         """
         self.project_repository = project_repository or get_project_repository()
-        self.ai_service = ai_service or AIService()
+        self.ai_service = ai_service or get_ai_service()
     
     async def get_project(self, project_id: str) -> Project:
         """

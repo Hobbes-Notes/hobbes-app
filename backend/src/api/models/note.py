@@ -2,11 +2,14 @@ from pydantic import BaseModel
 from typing import List, Optional, Dict
 from .project import ProjectRef
 from .pagination import PaginatedResponse
+from datetime import datetime
 
 class NoteCreate(BaseModel):
     content: str
     user_id: str
     project_id: Optional[str] = None
+    created_at: Optional[str] = None
+    updated_at: Optional[str] = None
 
 class NoteUpdate(BaseModel):
     content: Optional[str] = None

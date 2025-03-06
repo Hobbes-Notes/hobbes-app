@@ -8,6 +8,7 @@ import ProfilePage from './components/ProfilePage';
 import ProjectsPage from './components/ProjectsPage';
 import NotesPage from './components/NotesPage';
 import ProjectView from './components/ProjectView';
+import AIConfigPage from './components/AIConfigPage';
 
 function App() {
   const clientId = process.env.REACT_APP_GOOGLE_CLIENT_ID;
@@ -58,6 +59,7 @@ function App() {
                   </ProtectedRoute>
                 }
               />
+              <Route path="/ai-config" element={<AIConfigPage />} />
             </Routes>
           </div>
         </AuthProvider>
