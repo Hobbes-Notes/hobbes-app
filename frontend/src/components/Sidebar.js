@@ -200,6 +200,16 @@ const Sidebar = ({ projects, onProjectCreated, onProjectDeleted }) => {
           >
             Profile
           </Link>
+          <Link
+            to="/ai-config"
+            className={`block w-full text-left px-2 py-1.5 text-sm rounded ${
+              location.pathname === '/ai-config'
+                ? 'bg-blue-50 text-blue-700'
+                : 'text-gray-600 hover:bg-gray-50'
+            }`}
+          >
+            AI Configuration
+          </Link>
           <button
             onClick={handleLogout}
             className="w-full text-left px-2 py-1.5 text-sm text-red-600 hover:bg-red-50 rounded"

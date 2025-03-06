@@ -16,6 +16,12 @@ const api = axios.create({
   withCredentials: true // Important for cookies
 });
 
+// Create unauthenticated axios instance for AI configuration endpoints
+const unauthenticatedApi = axios.create({
+  baseURL: API_URL,
+  withCredentials: false // No credentials needed for AI endpoints
+});
+
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -230,9 +236,12 @@ export const AuthProvider = ({ children }) => {
 
   // Export the api instance for use in other components
   const getApi = useCallback(() => api, []);
+  
+  // Export the unauthenticated api instance for AI configuration endpoints
+  const getUnauthenticatedApi = useCallback(() => unauthenticatedApi, []);
 
   return (
-    <AuthContext.Provider value={{ user, loading, error, login, logout, getApi }}>
+    <AuthContext.Provider value={{ user, loading, error, login, logout, getApi, getUnauthenticatedApi }}>
       {children}
     </AuthContext.Provider>
   );

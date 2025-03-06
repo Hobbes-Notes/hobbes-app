@@ -92,51 +92,95 @@ class NoteService:
     
     async def create_note(self, note_data: NoteCreate) -> Note:
         """
-        Create a new note and associate it with relevant projects.
+        Create a new note.
         
         Args:
             note_data: The note data to create
             
         Returns:
-            The created note as a Note domain model
-            
-        Raises:
-            HTTPException: If there's an error creating the note
+            The created note
         """
         try:
-            # Validate input
-            self._validate_note_input(note_data)
+            logger.info(f"Starting note creation process for user {note_data.user_id}")
+            logger.debug(f"Note content (first 100 chars): '{note_data.content[:100]}...'")
             
-            # Save to database
-            note = await self.note_repository.create(note_data)
+            # Set created_at and updated_at if not provided
+            if not note_data.created_at:
+                note_data.created_at = datetime.now().isoformat()
+                logger.debug(f"Setting created_at to {note_data.created_at}")
+            if not note_data.updated_at:
+                note_data.updated_at = note_data.created_at
+                logger.debug(f"Setting updated_at to {note_data.updated_at}")
             
-            # Find relevant projects and extract content
-            user_projects = await self.project_service.get_projects(note_data.user_id)
-            relevant_projects, project_extractions = await self._find_relevant_projects(
-                note_data.content, 
-                user_projects, 
-                note_data.user_id
-            )
+            # Create the note
+            logger.debug(f"Calling note repository to create note")
+            created_note = await self.note_repository.create(note_data)
+            logger.info(f"Successfully created note with ID: {created_note.id}")
             
-            # Associate note with projects
-            await self._associate_note_with_projects(note, relevant_projects)
+            # Find relevant projects
+            if self.ai_service:
+                logger.info(f"AI service available, finding relevant projects for note {created_note.id}")
+                try:
+                    logger.debug(f"Calling _find_relevant_projects for note {created_note.id}")
+                    relevant_projects = await self._find_relevant_projects(created_note)
+                    logger.info(f"Found {len(relevant_projects)} relevant projects for note {created_note.id}")
+                    
+                    # Associate note with relevant projects
+                    for idx, (project, extracted_content) in enumerate(relevant_projects):
+                        logger.info(f"Processing association {idx+1}/{len(relevant_projects)}: note {created_note.id} with project {project.id} - '{project.name}'")
+                        
+                        logger.debug(f"Calling repository to associate note {created_note.id} with project {project.id}")
+                        await self.note_repository.associate_note_with_project(
+                            created_note.id, 
+                            project.id, 
+                            extracted_content
+                        )
+                        logger.info(f"Successfully associated note {created_note.id} with project {project.id}")
+                        
+                        # Update project summary if AI service is available
+                        try:
+                            logger.info(f"Starting project summary update for project {project.id} - '{project.name}'")
+                            
+                            # Use the extracted content from the current note
+                            logger.debug(f"Using extracted content from current note for project {project.id}")
+                            logger.debug(f"Extracted content length: {len(extracted_content)} chars")
+                            
+                            # Generate summary
+                            logger.info(f"Calling AI service to generate summary for project {project.id}")
+                            new_summary = await self.ai_service.generate_project_summary(
+                                project, 
+                                extracted_content
+                            )
+                            
+                            # Update project
+                            logger.info(f"Updating project {project.id} with new summary")
+                            await self.project_service.update_project(
+                                project.id,
+                                ProjectUpdate(summary=new_summary)
+                            )
+                            logger.info(f"Successfully updated summary for project {project.id}")
+                        except Exception as e:
+                            logger.error(f"Error updating project summary for project {project.id}: {str(e)}")
+                            logger.exception(f"Detailed exception information for project summary update:")
+                except Exception as e:
+                    logger.error(f"Error finding relevant projects for note {created_note.id}: {str(e)}")
+                    logger.exception("Detailed exception information for finding relevant projects:")
+            else:
+                logger.info(f"AI service not available, skipping project relevance check for note {created_note.id}")
             
-            # Update project summaries
-            await self._update_project_summaries(relevant_projects, project_extractions)
+            logger.info(f"Note creation process completed successfully for note {created_note.id}")
             
-            # Create and return the note response
-            project_refs = self._create_project_references(relevant_projects)
+            # Fetch the projects for the note before returning it
+            logger.debug(f"Fetching projects for note {created_note.id} before returning")
+            projects_refs = await self.note_repository.get_projects_for_note(created_note.id)
+            created_note.projects = projects_refs
+            logger.debug(f"Found {len(projects_refs)} projects for note {created_note.id}")
             
-            return Note(
-                id=note.id,
-                content=note.content,
-                created_at=note.created_at,
-                user_id=note.user_id,
-                projects=project_refs
-            )
+            return created_note
         except Exception as e:
             logger.error(f"Error creating note: {str(e)}")
-            raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+            logger.exception("Detailed exception information for note creation:")
+            raise
     
     def _validate_note_input(self, note_data: NoteCreate) -> None:
         """
@@ -154,61 +198,88 @@ class NoteService:
                 detail="project_id should not be provided in create_note. Project associations are determined automatically."
             )
     
-    async def _find_relevant_projects(
-        self, 
-        content: str, 
-        user_projects: List[Project], 
-        user_id: str
-    ) -> Tuple[List[Project], Dict[str, RelevanceExtraction]]:
+    async def _find_relevant_projects(self, note: Note) -> List[Tuple[Project, str]]:
         """
-        Find projects relevant to the note content and extract relevant content for each.
+        Find projects that are relevant to the note and extract relevant content.
         
         Args:
-            content: The note content
-            user_projects: List of user's projects
-            user_id: The user ID
+            note: The note to find relevant projects for
             
         Returns:
-            Tuple containing:
-            - List of relevant projects
-            - Dictionary mapping project IDs to RelevanceExtraction objects
+            List of tuples containing (project, extracted_content)
         """
-        relevant_projects = []
-        project_extractions = {}  # Dictionary to store project_id -> RelevanceExtraction
+        logger.info(f"Starting relevance check for note {note.id} from user {note.user_id}")
+        
+        # Skip if AI service is not available
+        if not self.ai_service:
+            logger.warning("AI service not available, skipping relevance check")
+            return []
+        
+        # Get all projects
+        logger.debug(f"Fetching all projects for user {note.user_id}")
+        projects = await self.project_service.get_projects(note.user_id)
+        logger.debug(f"Found {len(projects)} projects for user {note.user_id}")
+        
+        if not projects:
+            logger.info(f"No projects found for user {note.user_id}, skipping relevance check")
+            return []
         
         # Check relevance for each project
-        for project in user_projects:
-            # Convert project to dict if it's a domain model
-            project_dict = self._convert_to_dict(project)
-            
-            # Prepare parameters for extraction
-            extraction_params = {
-                'content': content,
-                'project': project_dict,
-                'user_id': user_id
-            }
-            
-            # Extract relevant content
-            extraction_result = await self.ai_service.extract_relevant_note_for_project(extraction_params)
-            
-            if extraction_result.is_relevant:
-                relevant_projects.append(project)
-                project_id = getattr(project, 'id', None)
-                project_extractions[project_id] = extraction_result
+        logger.info(f"Checking relevance of note {note.id} against {len(projects)} projects")
+        logger.debug(f"Note content: '{note.content[:100]}...'")
         
-        # If no relevant projects found, use Miscellaneous project
+        relevant_projects = []
+        
+        for project in projects:
+            # Skip Miscellaneous project
+            if project.name == "Miscellaneous":
+                logger.debug(f"Skipping relevance check for Miscellaneous project {project.id}")
+                continue
+                
+            try:
+                # Prepare parameters for extraction
+                params = {
+                    "content": note.content,
+                    "project": self._convert_to_dict(project),
+                    "user_id": note.user_id
+                }
+                logger.debug(f"Checking relevance for project {project.id} - '{project.name}'")
+                logger.debug(f"Extraction parameters: {params}")
+                
+                # Check if note is relevant to project
+                extraction = await self.ai_service.extract_relevant_note_for_project(params)
+                logger.debug(f"Relevance extraction result for project {project.id}: is_relevant={extraction.is_relevant}")
+                
+                if extraction.is_relevant:
+                    logger.info(f"Note {note.id} is relevant to project {project.id} - '{project.name}'")
+                    logger.debug(f"Extracted content: '{extraction.extracted_content[:100]}...'")
+                    relevant_projects.append((project, extraction.extracted_content))
+                else:
+                    logger.info(f"Note {note.id} is not relevant to project {project.id} - '{project.name}'")
+            except Exception as e:
+                logger.error(f"Error checking relevance for project {project.id}: {str(e)}")
+                logger.exception(f"Detailed exception information for project {project.id}:")
+        
+        # If no relevant projects found, associate with Miscellaneous project
         if not relevant_projects:
-            misc_project = await self.project_service.get_or_create_misc_project(user_id)
-            relevant_projects.append(misc_project)
-            
-            # For Miscellaneous project, create a basic RelevanceExtraction
-            project_id = getattr(misc_project, 'id', None)
-            project_extractions[project_id] = RelevanceExtraction(
-                is_relevant=True,
-                extracted_content=content
-            )
+            logger.info(f"No relevant projects found for note {note.id}, associating with Miscellaneous project")
+            try:
+                # Get or create Miscellaneous project
+                misc_project = await self.project_service.get_or_create_misc_project(note.user_id)
+                logger.info(f"Using Miscellaneous project {misc_project.id} for note {note.id}")
+                
+                # Create a RelevanceExtraction with the full note content
+                relevant_projects.append((misc_project, note.content))
+                logger.info(f"Added Miscellaneous project to relevant projects list")
+            except Exception as e:
+                logger.error(f"Error getting or creating Miscellaneous project: {str(e)}")
+                logger.exception("Detailed exception information for Miscellaneous project:")
         
-        return relevant_projects, project_extractions
+        # Log results
+        project_names = [p.name for p, _ in relevant_projects]
+        logger.info(f"Found {len(relevant_projects)} relevant projects for note {note.id}: {', '.join(project_names) if project_names else 'None'}")
+        
+        return relevant_projects
     
     async def _associate_note_with_projects(self, note: Note, projects: List[Project]) -> None:
         """
