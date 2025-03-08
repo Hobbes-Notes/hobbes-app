@@ -61,7 +61,7 @@ class AIService:
         # The repository ensures a valid configuration is always returned
         return await self._ai_repository.get_active_configuration(use_case)
     
-    async def generate_project_summary(self, params: Dict[str, Any]) -> str:
+    async def generate_project_summary(self, params: Dict[str, Any], version: Optional[int] = None) -> str:
         """
         Generate a summary for a project based on extracted note content.
         
@@ -72,6 +72,7 @@ class AIService:
                 - current_summary: The current summary of the project
                 - note_content: The extracted content from relevant notes
                 - project_id: The ID of the project (for logging purposes)
+            version: Optional specific version to use. If not provided, the active configuration will be used.
             
         Returns:
             The generated summary
@@ -103,9 +104,17 @@ class AIService:
             else:
                 logger.debug("No existing summary found for this project")
             
-            # Get the active configuration for project summary
-            logger.debug(f"Fetching AI configuration for PROJECT_SUMMARY use case")
-            config = await self._get_configuration(AIUseCase.PROJECT_SUMMARY)
+            # Get the configuration for project summary
+            logger.debug(f"Fetching AI configuration for PROJECT_SUMMARY use case" + (f" version {version}" if version else " (active version)"))
+            
+            if version is not None:
+                config = await self.get_configuration(AIUseCase.PROJECT_SUMMARY, version)
+                if not config:
+                    logger.error(f"Configuration for PROJECT_SUMMARY version {version} not found, falling back to active configuration")
+                    config = await self._get_configuration(AIUseCase.PROJECT_SUMMARY)
+            else:
+                config = await self._get_configuration(AIUseCase.PROJECT_SUMMARY)
+                
             logger.debug(f"Using model: {config.model}, max_tokens: {config.max_tokens}, temperature: {config.temperature}")
             
             # Log the template before replacement
@@ -174,7 +183,7 @@ class AIService:
             logger.exception(f"Error generating project summary: {str(e)}")
             return "Unable to generate summary: An error occurred."
     
-    async def extract_relevant_note_for_project(self, params: Dict[str, Any]) -> RelevanceExtraction:
+    async def extract_relevant_note_for_project(self, params: Dict[str, Any], version: Optional[int] = None) -> RelevanceExtraction:
         """
         Extract relevant content from a note for a specific project.
         
@@ -185,6 +194,7 @@ class AIService:
                 - project_description: The description of the project
                 - project_hierarchy: The hierarchical structure of the project with all child projects in nested JSON format
                 - user_id: The user ID
+            version: Optional specific version to use. If not provided, the active configuration will be used.
                 
         Returns:
             RelevanceExtraction object with is_relevant and extracted_content
@@ -211,9 +221,17 @@ class AIService:
             logger.debug(f"Project description: {project_description}")
             logger.debug(f"Project hierarchy provided: {bool(project_hierarchy)}")
             
-            # Get the active configuration for relevance extraction
-            logger.debug("Fetching AI configuration for RELEVANCE_EXTRACTION use case")
-            config = await self._get_configuration(AIUseCase.RELEVANCE_EXTRACTION)
+            # Get the configuration for relevance extraction
+            logger.debug(f"Fetching AI configuration for RELEVANCE_EXTRACTION use case" + (f" version {version}" if version else " (active version)"))
+            
+            if version is not None:
+                config = await self.get_configuration(AIUseCase.RELEVANCE_EXTRACTION, version)
+                if not config:
+                    logger.error(f"Configuration for RELEVANCE_EXTRACTION version {version} not found, falling back to active configuration")
+                    config = await self._get_configuration(AIUseCase.RELEVANCE_EXTRACTION)
+            else:
+                config = await self._get_configuration(AIUseCase.RELEVANCE_EXTRACTION)
+                
             logger.debug(f"Using model: {config.model}, max_tokens: {config.max_tokens}, temperature: {config.temperature}")
             
             # Log the template before replacement
@@ -271,6 +289,7 @@ class AIService:
                 
                 is_relevant = response_json["is_relevant"]
                 extracted_content = response_json["extracted_content"]
+                annotation = response_json.get("annotation", "")
                 
                 logger.info(f"Relevance determination: {'Relevant' if is_relevant else 'Not relevant'}")
                 if is_relevant:
@@ -279,7 +298,8 @@ class AIService:
                 
                 return RelevanceExtraction(
                     is_relevant=is_relevant,
-                    extracted_content=extracted_content
+                    extracted_content=extracted_content,
+                    annotation=annotation
                 )
             except json.JSONDecodeError as e:
                 logger.error(f"Failed to parse JSON response: {e}")

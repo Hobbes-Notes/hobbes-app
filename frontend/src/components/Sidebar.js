@@ -6,7 +6,7 @@ import { PlusIcon } from 'lucide-react';
 import ProjectFormModal from './ProjectFormModal';
 import ProjectTreeItem from './ProjectTreeItem';
 
-const Sidebar = ({ projects, onProjectCreated, onProjectDeleted }) => {
+const Sidebar = ({ projects = [], onProjectCreated, onProjectDeleted }) => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
@@ -114,7 +114,7 @@ const Sidebar = ({ projects, onProjectCreated, onProjectDeleted }) => {
     setShowProjectForm(true);
   };
 
-  // Get root level projects
+  // Filter root projects (those without a parent)
   const rootProjects = projects.filter(p => !p.parent_id);
 
   return (

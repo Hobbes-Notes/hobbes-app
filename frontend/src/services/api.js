@@ -204,6 +204,32 @@ export const useApiService = () => {
 
     getAIConfigurationResponseFormat: useCallback(async (useCase) => {
       return unauthenticatedApi.get(`/ai/configurations/${useCase}/response_format`);
-    }, [unauthenticatedApi])
+    }, [unauthenticatedApi]),
+
+    // AI Use Cases
+    getAIUseCases: useCallback(async () => {
+      return unauthenticatedApi.get('/ai/use-cases');
+    }, [unauthenticatedApi]),
+
+    // AI Files
+    getAIFiles: useCallback(async () => {
+      return api.get('/ai/files');
+    }, [api]),
+
+    uploadAIFile: useCallback(async (formData) => {
+      return api.post('/ai/files', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data'
+        }
+      });
+    }, [api]),
+
+    getAIFile: useCallback(async (fileId) => {
+      return api.get(`/ai/files/${fileId}`);
+    }, [api]),
+
+    interruptAIFile: useCallback(async (fileId) => {
+      return api.post(`/ai/files/${fileId}/interrupt`);
+    }, [api])
   };
 };
