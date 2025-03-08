@@ -41,32 +41,32 @@ DEFAULT_CONFIGS = {
         "model": "gpt-3.5-turbo",
         "system_prompt": "You are an AI assistant that helps categorize and extract relevant information from notes.",
         "user_prompt_template": """
-        Project name: {project_name}
-        Project description: {project_description}
-        Project summary: {project_summary}
-        
-        Note content:
-        {content}
-        
-        Task:
-        1. First, determine if this note is relevant to the project. Consider:
-           - Does the note mention topics related to the project?
-           - Does the note contain information that would be useful for the project?
-           - Does the note describe actions or tasks related to the project?
-        
-        2. If the note is relevant, extract ONLY the parts of the note that are relevant to this specific project.
-           - Focus on extracting actionable insights, key learnings, and next steps
-           - Discard any information that is not directly relevant to this project
-           - Maintain the original wording where possible
-           - Keep the extraction concise but complete
-        
-        Return your response as a JSON object with the following structure:
-        {{
-            "is_relevant": true/false,
-            "extracted_content": "The extracted content if relevant, empty string otherwise"
-        }}
-        
-        Ensure your response is valid JSON and nothing else.
+            Project name: {project_name}
+            Project description: {project_description}
+            Project summary: {project_summary}
+            
+            Note content:
+            {content}
+            
+            Task:
+            1. First, determine if this note is relevant to the project. Consider:
+            - Does the note mention topics related to the project?
+            - Does the note contain information that would be useful for the project?
+            - Does the note describe actions or tasks related to the project?
+            
+            2. If the note is relevant, extract ONLY the parts of the note that are relevant to this specific project.
+            - Focus on extracting actionable insights, key learnings, and next steps
+            - Discard any information that is not directly relevant to this project
+            - Maintain the original wording where possible
+            - Keep the extraction concise but complete
+            
+            Return your response as a JSON object with the following structure:
+            {{
+                "is_relevant": true/false,
+                "extracted_content": "The extracted content if relevant, empty string otherwise"
+            }}
+            
+            Ensure your response is valid JSON and nothing else.
         """,
         "max_tokens": 800,
         "temperature": 0.7,

@@ -220,10 +220,6 @@ class NoteService:
         projects = await self.project_service.get_projects(note.user_id)
         logger.debug(f"Found {len(projects)} projects for user {note.user_id}")
         
-        if not projects:
-            logger.info(f"No projects found for user {note.user_id}, skipping relevance check")
-            return []
-        
         # Check relevance for each project
         logger.info(f"Checking relevance of note {note.id} against {len(projects)} projects")
         logger.debug(f"Note content: '{note.content[:100]}...'")
