@@ -9,6 +9,7 @@ import logging
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from typing import List, Dict, Any
 from datetime import datetime
+import json
 
 from ..models.ai import AIConfiguration, AIUseCase
 from ..services.ai_service import AIService
@@ -89,8 +90,17 @@ async def get_active_configuration(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Invalid use case: {use_case}"
             )
-            
+        
+        # Get active configuration
+        logger.info(f"Getting active configuration for use case: {use_case}")
         configuration = await ai_service.get_active_configuration(use_case_enum)
+        
+        if not configuration:
+            logger.warning(f"No active configuration found for use case: {use_case}")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"No active configuration found for use case: {use_case}"
+            )
         
         return APIResponse(
             success=True,
@@ -106,6 +116,54 @@ async def get_active_configuration(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error getting active configuration: {str(e)}"
+        )
+
+@router.get("/configurations/{use_case}/parameters", response_model=APIResponse)
+async def get_available_parameters(
+    request: Request,
+    use_case: str,
+    ai_service: AIService = Depends(get_ai_service_dependency)
+):
+    """
+    Get available parameters for a use case.
+    """
+    try:
+        # Convert string to AIUseCase enum
+        try:
+            use_case_enum = AIUseCase(use_case)
+        except ValueError:
+            logger.warning(f"Invalid use case: {use_case}")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid use case: {use_case}"
+            )
+        
+        # Get parameter descriptions from the use case
+        logger.info(f"Getting parameter descriptions for use case: {use_case}")
+        param_descriptions = use_case_enum.param_descriptions
+        logger.debug(f"Parameter descriptions: {json.dumps(param_descriptions, default=str)}")
+        
+        # Create a list of parameter objects with name and description
+        parameters = [
+            {"name": param, "description": description}
+            for param, description in param_descriptions.items()
+        ]
+        logger.info(f"Found {len(parameters)} parameters for use case: {use_case}")
+        
+        return APIResponse(
+            success=True,
+            data=parameters,
+            message=f"Retrieved available parameters for use case: {use_case}"
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting available parameters: {str(e)}")
+        logger.exception("Detailed exception information:")
+        
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error getting available parameters: {str(e)}"
         )
 
 @router.get("/configurations/{use_case}/{version}", response_model=APIResponse)
@@ -288,52 +346,4 @@ async def delete_configuration(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error deleting configuration: {str(e)}"
-        )
-
-@router.get("/configurations/{use_case}/parameters", response_model=APIResponse)
-async def get_available_parameters(
-    request: Request,
-    use_case: str,
-    ai_service: AIService = Depends(get_ai_service_dependency)
-):
-    """
-    Get available parameters for a use case.
-    """
-    try:
-        # Convert string to AIUseCase enum
-        try:
-            use_case_enum = AIUseCase(use_case)
-        except ValueError:
-            logger.warning(f"Invalid use case: {use_case}")
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Invalid use case: {use_case}"
-            )
-        
-        # Get parameter descriptions from the use case
-        logger.info(f"Getting parameter descriptions for use case: {use_case}")
-        param_descriptions = use_case_enum.param_descriptions
-        logger.debug(f"Parameter descriptions: {json.dumps(param_descriptions, default=str)}")
-        
-        # Create a list of parameter objects with name and description
-        parameters = [
-            {"name": param, "description": description}
-            for param, description in param_descriptions.items()
-        ]
-        logger.info(f"Found {len(parameters)} parameters for use case: {use_case}")
-        
-        return APIResponse(
-            success=True,
-            data=parameters,
-            message=f"Retrieved available parameters for use case: {use_case}"
-        )
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error getting available parameters: {str(e)}")
-        logger.exception("Detailed exception information:")
-        
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error getting available parameters: {str(e)}"
         ) 
