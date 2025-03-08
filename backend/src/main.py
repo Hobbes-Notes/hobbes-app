@@ -10,6 +10,7 @@ from api.controllers.ai_controller import router as ai_router
 from api.services.auth_service import AuthService
 from api.services.user_service import UserService
 from api.repositories.impl import get_project_repository, get_note_repository, get_ai_repository
+from api.middleware import LoggingMiddleware
 
 # Configure logging
 logging.basicConfig(
@@ -39,6 +40,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Add logging middleware
+app.add_middleware(LoggingMiddleware)
 
 # Create services
 auth_service = AuthService()

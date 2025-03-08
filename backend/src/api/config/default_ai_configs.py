@@ -16,7 +16,7 @@ DEFAULT_CONFIGS = {
         Current project summary: {current_summary}
         
         Relevant note content:
-        {extracted_note_content}
+        {note_content}
         
         Based on the relevant note content and the current summary, create an updated summary for this project.
         The summary should include:
@@ -43,10 +43,9 @@ DEFAULT_CONFIGS = {
         "user_prompt_template": """
             Project name: {project_name}
             Project description: {project_description}
-            Project summary: {project_summary}
             
             Note content:
-            {content}
+            {note_content}
             
             Task:
             1. First, determine if this note is relevant to the project. Consider:

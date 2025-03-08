@@ -2,6 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { useApiService } from '../services/api';
 import { useNavigate } from 'react-router-dom';
 import Sidebar from './Sidebar';
+import { createLogger } from '../utils/logging';
+
+// Create a logger for the AIConfigPage component
+const logger = createLogger('AIConfigPage');
 
 const AIConfigPage = () => {
   const api = useApiService();
@@ -13,6 +17,9 @@ const AIConfigPage = () => {
   const [activeConfig, setActiveConfig] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  
+  // State for available parameters
+  const [availableParameters, setAvailableParameters] = useState([]);
   
   // State for form
   const [formData, setFormData] = useState({
@@ -47,20 +54,69 @@ const AIConfigPage = () => {
   
   // Load configurations for the selected use case
   const loadConfigurations = async () => {
+    logger.log(`Loading configurations for use case: ${selectedUseCase}`);
     setLoading(true);
     setError(null);
+    
+    // Track which operations succeeded
+    const operationStatus = {
+      getAllConfigurations: false,
+      getActiveConfiguration: false,
+      getParameters: false
+    };
+    
     try {
-      const response = await api.getAllAIConfigurations(selectedUseCase);
-      setConfigurations(response.data.data);
+      // Get all configurations
+      try {
+        logger.log(`Fetching all configurations for use case: ${selectedUseCase}`);
+        const response = await api.getAllAIConfigurations(selectedUseCase);
+        setConfigurations(response.data.data);
+        logger.log(`Successfully loaded ${response.data.data.length} configurations for use case: ${selectedUseCase}`);
+        operationStatus.getAllConfigurations = true;
+      } catch (err) {
+        logger.logError(`Error loading all configurations for use case: ${selectedUseCase}`, err);
+        setError('Failed to load configurations. Please try again.');
+      }
       
       // Get active configuration
-      const activeResponse = await api.getActiveAIConfiguration(selectedUseCase);
-      setActiveConfig(activeResponse.data.data);
+      try {
+        logger.log(`Fetching active configuration for use case: ${selectedUseCase}`);
+        const activeResponse = await api.getActiveAIConfiguration(selectedUseCase);
+        setActiveConfig(activeResponse.data.data);
+        logger.log(`Successfully loaded active configuration for use case: ${selectedUseCase}`);
+        operationStatus.getActiveConfiguration = true;
+      } catch (err) {
+        logger.logError(`Error loading active configuration for use case: ${selectedUseCase}`, err);
+        if (!operationStatus.getAllConfigurations) {
+          setError('Failed to load configurations. Please try again.');
+        }
+      }
+      
+      // Get available parameters
+      try {
+        logger.log(`Fetching parameters for use case: ${selectedUseCase}`);
+        const parametersResponse = await api.getAIConfigurationParameters(selectedUseCase);
+        setAvailableParameters(parametersResponse.data.data);
+        logger.log(`Successfully loaded ${parametersResponse.data.data.length} parameters for use case: ${selectedUseCase}`);
+        operationStatus.getParameters = true;
+      } catch (err) {
+        logger.logError(`Error loading parameters for use case: ${selectedUseCase}`, err);
+        if (!operationStatus.getAllConfigurations && !operationStatus.getActiveConfiguration) {
+          setError('Failed to load configurations. Please try again.');
+        }
+      }
+      
+      // Set overall error message if all operations failed
+      if (!operationStatus.getAllConfigurations && !operationStatus.getActiveConfiguration && !operationStatus.getParameters) {
+        logger.logError(`All operations failed for use case: ${selectedUseCase}`, null);
+        setError('Failed to load any configuration data. Please try again or contact support.');
+      }
     } catch (err) {
-      console.error('Error loading configurations:', err);
-      setError('Failed to load configurations. Please try again.');
+      logger.logError(`Unexpected error loading configurations for use case: ${selectedUseCase}`, err);
+      setError('An unexpected error occurred. Please try again or contact support.');
     } finally {
       setLoading(false);
+      logger.log(`Finished loading configurations for use case: ${selectedUseCase}`);
     }
   };
   
@@ -91,6 +147,20 @@ const AIConfigPage = () => {
   // Handle form input changes
   const handleInputChange = (e) => {
     const { name, value } = e.target;
+    
+    // If changing the use case, fetch the available parameters for the new use case
+    if (name === 'use_case' && value !== formData.use_case) {
+      logger.log(`Changing use case from ${formData.use_case} to ${value}`);
+      api.getAIConfigurationParameters(value)
+        .then(response => {
+          setAvailableParameters(response.data.data);
+          logger.log(`Loaded ${response.data.data.length} parameters for use case: ${value}`);
+        })
+        .catch(err => {
+          logger.logError('Error loading parameters', err);
+        });
+    }
+    
     setFormData({
       ...formData,
       [name]: name === 'max_tokens' || name === 'temperature' 
@@ -102,18 +172,46 @@ const AIConfigPage = () => {
   // Handle form submission
   const handleSubmit = async (e) => {
     e.preventDefault();
+    logger.log(`Submitting form for use case: ${formData.use_case}`);
     
     // Validate description field
     if (!formData.description.trim()) {
+      logger.log(`Form validation failed: Description is required`);
       setError('Description is required. Please provide a meaningful description for this configuration.');
       return;
     }
+    
+    // Validate user prompt template
+    if (!formData.user_prompt_template.trim()) {
+      logger.log(`Form validation failed: User prompt template is required`);
+      setError('User prompt template is required.');
+      return;
+    }
+    
+    // Validate system prompt
+    if (!formData.system_prompt.trim()) {
+      logger.log(`Form validation failed: System prompt is required`);
+      setError('System prompt is required.');
+      return;
+    }
+    
+    logger.log(`Form validation passed, creating configuration for use case: ${formData.use_case}`, {
+      use_case: formData.use_case,
+      model: formData.model,
+      max_tokens: formData.max_tokens,
+      temperature: formData.temperature,
+      description: formData.description,
+      system_prompt_length: formData.system_prompt.length,
+      user_prompt_template_length: formData.user_prompt_template.length
+    });
     
     setLoading(true);
     setError(null);
     
     try {
-      await api.createAIConfiguration(formData);
+      const response = await api.createAIConfiguration(formData);
+      logger.log(`Successfully created configuration for use case: ${formData.use_case}, version: ${response.data.data.version}`);
+      
       setShowForm(false);
       setCloningConfig(null);
       setFormData({
@@ -125,25 +223,38 @@ const AIConfigPage = () => {
         temperature: 0.7,
         description: ''
       });
+      
+      logger.log(`Reloading configurations after successful creation`);
       loadConfigurations();
     } catch (err) {
-      console.error('Error creating configuration:', err);
-      setError('Failed to create configuration. Please try again.');
+      logger.logError(`Error creating configuration for use case: ${formData.use_case}`, err);
+      
+      // Extract error message from response if available
+      let errorMessage = 'Failed to create configuration. Please try again.';
+      if (err.response && err.response.data && err.response.data.detail) {
+        errorMessage = err.response.data.detail;
+        logger.logError(`Server error details: ${errorMessage}`, err);
+      }
+      
+      setError(errorMessage);
     } finally {
       setLoading(false);
+      logger.log(`Form submission completed for use case: ${formData.use_case}`);
     }
   };
   
   // Set a configuration as active
   const handleSetActive = async (version) => {
+    logger.log(`Setting configuration as active for use case: ${selectedUseCase}, version: ${version}`);
     setLoading(true);
     setError(null);
     
     try {
       await api.setActiveAIConfiguration(selectedUseCase, version);
+      logger.log(`Successfully set configuration as active for use case: ${selectedUseCase}, version: ${version}`);
       loadConfigurations();
     } catch (err) {
-      console.error('Error setting active configuration:', err);
+      logger.logError('Error setting active configuration', err);
       setError('Failed to set active configuration. Please try again.');
     } finally {
       setLoading(false);
@@ -156,14 +267,16 @@ const AIConfigPage = () => {
       return;
     }
     
+    logger.log(`Deleting configuration for use case: ${selectedUseCase}, version: ${version}`);
     setLoading(true);
     setError(null);
     
     try {
       await api.deleteAIConfiguration(selectedUseCase, version);
+      logger.log(`Successfully deleted configuration for use case: ${selectedUseCase}, version: ${version}`);
       loadConfigurations();
     } catch (err) {
-      console.error('Error deleting configuration:', err);
+      logger.logError('Error deleting configuration', err);
       setError('Failed to delete configuration. Please try again.');
     } finally {
       setLoading(false);
@@ -342,6 +455,15 @@ const AIConfigPage = () => {
                   placeholder="Template for the user prompt with variables to be filled"
                   required
                 />
+                <div className="mt-2 text-sm text-gray-600">
+                  <p className="font-medium">Available parameters:</p>
+                  <ul className="list-disc list-inside ml-2">
+                    {availableParameters.map((param) => (
+                      <li key={param.name}>{param.name} - {param.description}</li>
+                    ))}
+                  </ul>
+                  <p className="mt-1">Use these parameters in your template with curly braces, e.g., {'{project_name}'}</p>
+                </div>
               </div>
               
               <div className="flex justify-end gap-2">
@@ -532,6 +654,14 @@ const AIConfigPage = () => {
                     <pre className="mt-1 p-2 bg-gray-100 rounded text-sm overflow-auto whitespace-pre-wrap">
                       {configurations.find(c => c.version === viewingConfigVersion)?.user_prompt_template}
                     </pre>
+                    <div className="mt-2 text-sm text-gray-600">
+                      <p className="font-medium">Available parameters:</p>
+                      <ul className="list-disc list-inside ml-2">
+                        {availableParameters.map((param) => (
+                          <li key={param.name}>{param.name} - {param.description}</li>
+                        ))}
+                      </ul>
+                    </div>
                   </div>
                 </div>
               )}
