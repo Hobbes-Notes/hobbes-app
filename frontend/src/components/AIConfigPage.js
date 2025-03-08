@@ -122,6 +122,21 @@ const AIConfigPage = () => {
   
   // Load configurations when the selected use case changes
   useEffect(() => {
+    // Clear and close the form when use case changes
+    setShowForm(false);
+    setCloningConfig(null);
+    setFormData({
+      use_case: selectedUseCase,
+      model: 'gpt-3.5-turbo',
+      system_prompt: '',
+      user_prompt_template: '',
+      max_tokens: 500,
+      temperature: 0.7,
+      description: ''
+    });
+    setViewingConfigVersion(null);
+    
+    // Load configurations for the new use case
     loadConfigurations();
   }, [selectedUseCase]);
   
@@ -311,7 +326,17 @@ const AIConfigPage = () => {
           <select
             className="w-full md:w-1/3 p-2 border border-gray-300 rounded-md"
             value={selectedUseCase}
-            onChange={(e) => setSelectedUseCase(e.target.value)}
+            onChange={(e) => {
+              const newUseCase = e.target.value;
+              // If form is open, confirm before changing
+              if (showForm && newUseCase !== selectedUseCase) {
+                if (window.confirm('Changing the use case will clear the current form. Continue?')) {
+                  setSelectedUseCase(newUseCase);
+                }
+              } else {
+                setSelectedUseCase(newUseCase);
+              }
+            }}
           >
             {useCaseOptions.map((option) => (
               <option key={option.value} value={option.value}>
@@ -446,6 +471,20 @@ const AIConfigPage = () => {
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   User Prompt Template <span className="text-red-500">*</span>
                 </label>
+                <div className="mb-2 text-sm text-gray-600">
+                  <p className="font-medium">Available parameters:</p>
+                  <ul className="list-disc list-inside ml-2">
+                    {availableParameters.map((param) => (
+                      <li key={param.name}><code>{`{${param.name}}`}</code> - {param.description}</li>
+                    ))}
+                  </ul>
+                  <p className="mt-2">
+                    <span className="font-medium">Usage:</span> Insert parameters using single curly braces, e.g., <code>{'{project_name}'}</code>
+                  </p>
+                  <p className="mt-1">
+                    <span className="font-medium">JSON structures:</span> Use double curly braces to include JSON in your template, e.g., <code>{'{{\"key\": \"value\"}}'}</code> to avoid them being interpreted as parameters.
+                  </p>
+                </div>
                 <textarea
                   name="user_prompt_template"
                   className="w-full p-2 border border-gray-300 rounded-md"
@@ -455,15 +494,6 @@ const AIConfigPage = () => {
                   placeholder="Template for the user prompt with variables to be filled"
                   required
                 />
-                <div className="mt-2 text-sm text-gray-600">
-                  <p className="font-medium">Available parameters:</p>
-                  <ul className="list-disc list-inside ml-2">
-                    {availableParameters.map((param) => (
-                      <li key={param.name}>{param.name} - {param.description}</li>
-                    ))}
-                  </ul>
-                  <p className="mt-1">Use these parameters in your template with curly braces, e.g., {'{project_name}'}</p>
-                </div>
               </div>
               
               <div className="flex justify-end gap-2">
@@ -651,17 +681,23 @@ const AIConfigPage = () => {
                   
                   <div>
                     <h4 className="text-sm font-medium text-gray-700">User Prompt Template</h4>
-                    <pre className="mt-1 p-2 bg-gray-100 rounded text-sm overflow-auto whitespace-pre-wrap">
-                      {configurations.find(c => c.version === viewingConfigVersion)?.user_prompt_template}
-                    </pre>
                     <div className="mt-2 text-sm text-gray-600">
                       <p className="font-medium">Available parameters:</p>
                       <ul className="list-disc list-inside ml-2">
                         {availableParameters.map((param) => (
-                          <li key={param.name}>{param.name} - {param.description}</li>
+                          <li key={param.name}><code>{`{${param.name}}`}</code> - {param.description}</li>
                         ))}
                       </ul>
+                      <p className="mt-2">
+                        <span className="font-medium">Usage:</span> Insert parameters using single curly braces, e.g., <code>{'{project_name}'}</code>
+                      </p>
+                      <p className="mt-1 mb-2">
+                        <span className="font-medium">JSON structures:</span> Use double curly braces to include JSON in your template, e.g., <code>{'{{\"key\": \"value\"}}'}</code> to avoid them being interpreted as parameters.
+                      </p>
                     </div>
+                    <pre className="mt-1 p-2 bg-gray-100 rounded text-sm overflow-auto whitespace-pre-wrap">
+                      {configurations.find(c => c.version === viewingConfigVersion)?.user_prompt_template}
+                    </pre>
                   </div>
                 </div>
               )}
