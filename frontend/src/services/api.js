@@ -200,6 +200,10 @@ export const useApiService = () => {
 
     getAIConfigurationParameters: useCallback(async (useCase) => {
       return unauthenticatedApi.get(`/ai/configurations/${useCase}/parameters`);
+    }, [unauthenticatedApi]),
+
+    getAIConfigurationResponseFormat: useCallback(async (useCase) => {
+      return unauthenticatedApi.get(`/ai/configurations/${useCase}/response_format`);
     }, [unauthenticatedApi])
   };
 };

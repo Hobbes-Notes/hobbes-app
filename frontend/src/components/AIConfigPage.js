@@ -21,6 +21,9 @@ const AIConfigPage = () => {
   // State for available parameters
   const [availableParameters, setAvailableParameters] = useState([]);
   
+  // State for response format
+  const [responseFormat, setResponseFormat] = useState('');
+  
   // State for form
   const [formData, setFormData] = useState({
     use_case: 'project_summary',
@@ -62,7 +65,8 @@ const AIConfigPage = () => {
     const operationStatus = {
       getAllConfigurations: false,
       getActiveConfiguration: false,
-      getParameters: false
+      getParameters: false,
+      getResponseFormat: false
     };
     
     try {
@@ -106,8 +110,22 @@ const AIConfigPage = () => {
         }
       }
       
+      // Get response format
+      try {
+        logger.log(`Fetching response format for use case: ${selectedUseCase}`);
+        const responseFormatResponse = await api.getAIConfigurationResponseFormat(selectedUseCase);
+        setResponseFormat(responseFormatResponse.data.data);
+        logger.log(`Successfully loaded response format for use case: ${selectedUseCase}`);
+        operationStatus.getResponseFormat = true;
+      } catch (err) {
+        logger.logError(`Error loading response format for use case: ${selectedUseCase}`, err);
+        if (!operationStatus.getAllConfigurations && !operationStatus.getActiveConfiguration && !operationStatus.getParameters) {
+          setError('Failed to load configurations. Please try again.');
+        }
+      }
+      
       // Set overall error message if all operations failed
-      if (!operationStatus.getAllConfigurations && !operationStatus.getActiveConfiguration && !operationStatus.getParameters) {
+      if (!operationStatus.getAllConfigurations && !operationStatus.getActiveConfiguration && !operationStatus.getParameters && !operationStatus.getResponseFormat) {
         logger.logError(`All operations failed for use case: ${selectedUseCase}`, null);
         setError('Failed to load any configuration data. Please try again or contact support.');
       }
@@ -173,6 +191,16 @@ const AIConfigPage = () => {
         })
         .catch(err => {
           logger.logError('Error loading parameters', err);
+        });
+        
+      // Also fetch the response format for the new use case
+      api.getAIConfigurationResponseFormat(value)
+        .then(response => {
+          setResponseFormat(response.data.data);
+          logger.log(`Loaded response format for use case: ${value}`);
+        })
+        .catch(err => {
+          logger.logError('Error loading response format', err);
         });
     }
     
@@ -471,19 +499,30 @@ const AIConfigPage = () => {
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   User Prompt Template <span className="text-red-500">*</span>
                 </label>
-                <div className="mb-2 text-sm text-gray-600">
-                  <p className="font-medium">Available parameters:</p>
-                  <ul className="list-disc list-inside ml-2">
-                    {availableParameters.map((param) => (
-                      <li key={param.name}><code>{`{${param.name}}`}</code> - {param.description}</li>
-                    ))}
-                  </ul>
-                  <p className="mt-2">
-                    <span className="font-medium">Usage:</span> Insert parameters using single curly braces, e.g., <code>{'{project_name}'}</code>
-                  </p>
-                  <p className="mt-1">
-                    <span className="font-medium">JSON structures:</span> Use double curly braces to include JSON in your template, e.g., <code>{'{{\"key\": \"value\"}}'}</code> to avoid them being interpreted as parameters.
-                  </p>
+                <div className="mb-2 text-sm text-gray-600 p-3 bg-yellow-50 border border-yellow-200 rounded">
+                  <p className="font-medium text-yellow-800">Template Instructions:</p>
+                  
+                  <div className="mt-2">
+                    <p className="font-medium text-yellow-800">Available Parameters:</p>
+                    <ul className="list-disc list-inside ml-2 text-yellow-800">
+                      {availableParameters.map((param) => (
+                        <li key={param.name}><code>{`{${param.name}}`}</code> - {param.description}</li>
+                      ))}
+                    </ul>
+                  </div>
+                  
+                  <div className="mt-2">
+                    <p className="font-medium text-yellow-800">Usage:</p>
+                    <p className="text-yellow-800">Insert parameters using single curly braces, e.g., <code>{'{project_name}'}</code></p>
+                  </div>
+                  
+                  <div className="mt-3">
+                    <p className="font-medium text-yellow-800">Response Format:</p>
+                    <p className="text-yellow-800">Do not include output format instructions in your template. The system will automatically append the following response format:</p>
+                    <pre className="mt-2 p-2 bg-yellow-100 rounded text-xs overflow-auto whitespace-pre-wrap text-yellow-800">
+                      {responseFormat || 'Loading response format...'}
+                    </pre>
+                  </div>
                 </div>
                 <textarea
                   name="user_prompt_template"
@@ -681,20 +720,6 @@ const AIConfigPage = () => {
                   
                   <div>
                     <h4 className="text-sm font-medium text-gray-700">User Prompt Template</h4>
-                    <div className="mt-2 text-sm text-gray-600">
-                      <p className="font-medium">Available parameters:</p>
-                      <ul className="list-disc list-inside ml-2">
-                        {availableParameters.map((param) => (
-                          <li key={param.name}><code>{`{${param.name}}`}</code> - {param.description}</li>
-                        ))}
-                      </ul>
-                      <p className="mt-2">
-                        <span className="font-medium">Usage:</span> Insert parameters using single curly braces, e.g., <code>{'{project_name}'}</code>
-                      </p>
-                      <p className="mt-1 mb-2">
-                        <span className="font-medium">JSON structures:</span> Use double curly braces to include JSON in your template, e.g., <code>{'{{\"key\": \"value\"}}'}</code> to avoid them being interpreted as parameters.
-                      </p>
-                    </div>
                     <pre className="mt-1 p-2 bg-gray-100 rounded text-sm overflow-auto whitespace-pre-wrap">
                       {configurations.find(c => c.version === viewingConfigVersion)?.user_prompt_template}
                     </pre>

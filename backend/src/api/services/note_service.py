@@ -10,6 +10,7 @@ from typing import List, Optional, Dict, Tuple
 from fastapi import HTTPException, Depends
 from datetime import datetime
 from litellm import completion
+import json
 
 from ..models.note import Note, NoteCreate, NoteUpdate, PaginatedNotes
 from ..repositories.note_repository import NoteRepository
@@ -201,6 +202,46 @@ class NoteService:
                 detail="project_id should not be provided in create_note. Project associations are determined automatically."
             )
     
+    def _get_simplified_project_hierarchy(self, projects: List[Project], current_project_id: str) -> str:
+        """
+        Create a simplified JSON representation of the project hierarchy, including only
+        the name and description of child projects.
+        
+        Args:
+            projects: List of all projects
+            current_project_id: ID of the current project
+            
+        Returns:
+            JSON string representing the project hierarchy
+        """
+        # Create a mapping of parent_id to child projects
+        parent_to_children = {}
+        for project in projects:
+            parent_id = getattr(project, 'parent_id', None)
+            if parent_id:
+                if parent_id not in parent_to_children:
+                    parent_to_children[parent_id] = []
+                # Only include name and description
+                parent_to_children[parent_id].append({
+                    "name": project.name,
+                    "description": project.description or ""
+                })
+        
+        # Function to recursively build the hierarchy
+        def build_hierarchy(project_id):
+            children = parent_to_children.get(project_id, [])
+            return children
+        
+        # Build the hierarchy for the current project
+        hierarchy = build_hierarchy(current_project_id)
+        
+        # Convert to JSON string
+        try:
+            return json.dumps(hierarchy)
+        except Exception as e:
+            logger.error(f"Error converting project hierarchy to JSON: {str(e)}")
+            return "[]"
+    
     async def _find_relevant_projects(self, note: Note) -> List[Tuple[Project, str]]:
         """
         Find projects that are relevant to the note and extract relevant content.
@@ -236,11 +277,15 @@ class NoteService:
                 continue
                 
             try:
+                # Get simplified project hierarchy
+                project_hierarchy = self._get_simplified_project_hierarchy(projects, project.id)
+                
                 # Prepare parameters for extraction
                 params = {
                     "note_content": note.content,
                     "project_name": project.name,
                     "project_description": project.description or "",
+                    "project_hierarchy": project_hierarchy,
                     "user_id": note.user_id
                 }
                 logger.debug(f"Checking relevance for project {project.id} - '{project.name}'")

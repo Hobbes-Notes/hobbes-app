@@ -23,7 +23,7 @@ class AIUseCase(str, Enum):
         """
         params_map = {
             self.PROJECT_SUMMARY: ["project_name", "project_description", "current_summary", "note_content"],
-            self.RELEVANCE_EXTRACTION: ["project_name", "project_description", "note_content"]
+            self.RELEVANCE_EXTRACTION: ["project_name", "project_description", "note_content", "project_hierarchy"]
         }
         return params_map.get(self, [])
     
@@ -36,9 +36,38 @@ class AIUseCase(str, Enum):
             "project_name": "The name of the project",
             "project_description": "The description of the project",
             "current_summary": "The current summary of the project",
-            "note_content": "The content of the note"
+            "note_content": "The content of the note",
+            "project_hierarchy": "The hierarchical structure of the project with all child projects in nested JSON format"
         }
         return {param: descriptions.get(param, "") for param in self.expected_params}
+    
+    @property
+    def response_format(self) -> str:
+        """
+        Returns the expected response format for this use case.
+        This will be appended to the user prompt.
+        """
+        formats = {
+            self.PROJECT_SUMMARY: """
+Return your response as a JSON object with the following structure:
+{
+    "summary": "The generated summary with markdown formatting"
+}
+
+Ensure your response is valid JSON and nothing else.
+""",
+            self.RELEVANCE_EXTRACTION: """
+Return your response as a JSON object with the following structure:
+{
+    "is_relevant": true/false,
+    "extracted_content": "The extracted content if relevant, empty string otherwise",
+    "annotation": "Brief explanation of why the note is relevant or not relevant to this project"
+}
+
+Ensure your response is valid JSON and nothing else.
+"""
+        }
+        return formats.get(self, "")
     
     def _extract_template_params(self, template: str) -> List[str]:
         """
@@ -144,9 +173,11 @@ class RelevanceExtraction(BaseModel):
     Attributes:
         is_relevant: Whether the note is relevant to the project
         extracted_content: The extracted relevant content from the note
+        annotation: The reason why the note was found to be relevant or not relevant
     """
     is_relevant: bool
     extracted_content: str
+    annotation: Optional[str] = None
     
     def __bool__(self):
         """

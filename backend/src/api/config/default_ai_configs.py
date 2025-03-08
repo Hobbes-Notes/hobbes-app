@@ -25,13 +25,6 @@ DEFAULT_CONFIGS = {
         
         Format the summary with markdown headings (## for main sections).
         Keep it concise (max 250 words) and focused on actionable insights.
-        
-        Return your response as a JSON object with the following structure:
-        {{
-            "summary": "The generated summary with markdown formatting"
-        }}
-        
-        Ensure your response is valid JSON and nothing else.
         """,
         "max_tokens": 500,
         "temperature": 0.7,
@@ -43,6 +36,7 @@ DEFAULT_CONFIGS = {
         "user_prompt_template": """
             Project name: {project_name}
             Project description: {project_description}
+            Project hierarchy (child projects): {project_hierarchy}
             
             Note content:
             {note_content}
@@ -52,21 +46,14 @@ DEFAULT_CONFIGS = {
             - Does the note mention topics related to the project?
             - Does the note contain information that would be useful for the project?
             - Does the note describe actions or tasks related to the project?
+            - Does the note relate to any of the child projects in the hierarchy?
             
             2. If the note is relevant, extract ONLY the parts of the note that are relevant to this specific project.
             - Focus on extracting actionable insights, key learnings, and next steps
             - Discard any information that is not directly relevant to this project
             - Maintain the original wording where possible
             - Keep the extraction concise but complete
-            
-            Return your response as a JSON object with the following structure:
-            {{
-                "is_relevant": true/false,
-                "extracted_content": "The extracted content if relevant, empty string otherwise"
-            }}
-            
-            Ensure your response is valid JSON and nothing else.
-        """,
+            """,
         "max_tokens": 800,
         "temperature": 0.7,
         "description": "Default relevance extraction configuration"

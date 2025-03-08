@@ -125,19 +125,10 @@ class AIService:
                 logger.error(f"Error formatting prompt template: {str(e)}")
                 logger.error(f"Template: {config.user_prompt_template}")
                 logger.error(f"Available variables: project_name, project_description, current_summary, note_content")
-                # Fallback to a basic prompt if template formatting fails
-                user_prompt = f"""
-                Project: {project_name}
-                Description: {project_description}
-                Current summary: {current_summary}
-                
-                Relevant note content:
-                {note_content}
-                
-                Generate an updated summary for this project based on the note content.
-                Return JSON with "summary" containing the generated summary with markdown formatting.
-                """
-                logger.warning(f"Using fallback prompt due to template formatting error")
+                raise ValueError(f"Error formatting prompt template: {str(e)}")
+
+            # Append the response format
+            user_prompt += AIUseCase.PROJECT_SUMMARY.response_format
             
             logger.info(f"Sending prompt to OpenAI API for project summary generation using model: {config.model}")
             
@@ -192,6 +183,7 @@ class AIService:
                 - note_content: The note content
                 - project_name: The name of the project
                 - project_description: The description of the project
+                - project_hierarchy: The hierarchical structure of the project with all child projects in nested JSON format
                 - user_id: The user ID
                 
         Returns:
@@ -208,6 +200,7 @@ class AIService:
             note_content = params.get("note_content", "")
             project_name = params.get("project_name", "")
             project_description = params.get("project_description", "")
+            project_hierarchy = params.get("project_hierarchy", "{}")
             user_id = params.get("user_id", "")
             
             # Log input parameters
@@ -216,6 +209,7 @@ class AIService:
             logger.debug(f"Content preview: '{note_content[:100]}...'")
             logger.debug(f"Project name: {project_name}")
             logger.debug(f"Project description: {project_description}")
+            logger.debug(f"Project hierarchy provided: {bool(project_hierarchy)}")
             
             # Get the active configuration for relevance extraction
             logger.debug("Fetching AI configuration for RELEVANCE_EXTRACTION use case")
@@ -230,26 +224,20 @@ class AIService:
                 user_prompt = config.user_prompt_template.format(
                     project_name=project_name,
                     project_description=project_description,
-                    note_content=note_content
+                    note_content=note_content,
+                    project_hierarchy=project_hierarchy
                 )
                 logger.debug(f"Prompt after replacement (first 500 chars):\n{user_prompt[:500]}...")
                 logger.debug(f"Prepared user prompt with length: {len(user_prompt)}")
             except KeyError as e:
                 logger.error(f"Error formatting prompt template: {str(e)}")
                 logger.error(f"Template: {config.user_prompt_template}")
-                logger.error(f"Available variables: project_name, project_description, note_content")
-                # Fallback to a basic prompt if template formatting fails
-                user_prompt = f"""
-                Project: {project_name}
-                Description: {project_description}
-                
-                Note content:
-                {note_content}
-                
-                Determine if this note is relevant to the project and extract relevant content.
-                Return JSON with "is_relevant" (boolean) and "extracted_content" (string).
-                """
-                logger.warning(f"Using fallback prompt due to template formatting error")
+                logger.error(f"Available variables: project_name, project_description, note_content, project_hierarchy")
+                raise ValueError(f"Error formatting prompt template: {str(e)}")
+            
+
+            # Append the response format
+            user_prompt += AIUseCase.RELEVANCE_EXTRACTION.response_format
             
             # Call OpenAI API
             logger.info(f"Calling OpenAI API for relevance extraction for project '{project_name}'")
@@ -277,8 +265,12 @@ class AIService:
                 response_json = json.loads(response_content)
                 
                 # Extract the relevance and content
-                is_relevant = response_json.get("is_relevant", False)
-                extracted_content = response_json.get("extracted_content", "")
+                if "is_relevant" not in response_json or "extracted_content" not in response_json:
+                    logger.error(f"Response JSON missing required keys. Keys found: {list(response_json.keys())}")
+                    raise ValueError(f"Invalid response format: missing required keys. Keys found: {list(response_json.keys())}")
+                
+                is_relevant = response_json["is_relevant"]
+                extracted_content = response_json["extracted_content"]
                 
                 logger.info(f"Relevance determination: {'Relevant' if is_relevant else 'Not relevant'}")
                 if is_relevant:
@@ -292,11 +284,11 @@ class AIService:
             except json.JSONDecodeError as e:
                 logger.error(f"Failed to parse JSON response: {e}")
                 logger.error(f"Response content: {response_content}")
-                return RelevanceExtraction(is_relevant=False, extracted_content="")
-                
+                raise ValueError(f"Failed to parse JSON response: {e}")
+        
         except Exception as e:
             logger.exception(f"Error extracting relevance: {str(e)}")
-            return RelevanceExtraction(is_relevant=False, extracted_content="")
+            raise
     
     async def get_configuration(self, use_case: AIUseCase, version: int) -> Optional[AIConfiguration]:
         """
