@@ -1,8 +1,11 @@
 """
-Repository Implementation Package
+Repository Implementations
 
-This package provides implementations of the repository interfaces.
+This module provides factory functions for repository implementations.
 """
+
+import os
+from typing import Optional
 
 from ...repositories.project_repository import ProjectRepository
 from ...repositories.note_repository import NoteRepository
@@ -12,13 +15,19 @@ from .note_repository_impl import DynamoDBNoteRepository
 from .ai_repository_impl import AIRepositoryImpl
 from .user_repository_impl import UserRepositoryImpl
 from ...services.ai_service import AIService
+from ..ai_file_repository import AIFileRepository
+from .ai_file_repository_impl import AIFileRepositoryImpl
+from ..s3_repository import S3Repository
+from .s3_repository_impl import S3RepositoryImpl
 
 # Singleton instances
 _project_repository = None
 _note_repository = None
 _user_repository = None
-_ai_repository = None
-_ai_service = None
+_ai_repository_instance: Optional[AIRepository] = None
+_ai_service_instance: Optional[AIService] = None
+_ai_file_repository_instance: Optional[AIFileRepository] = None
+_ai_file_s3_repository_instance: Optional[S3Repository] = None
 
 def get_project_repository() -> ProjectRepository:
     """
@@ -58,26 +67,57 @@ def get_user_repository():
 
 def get_ai_repository() -> AIRepository:
     """
-    Get the AI repository implementation.
+    Get the AI repository instance.
     
     Returns:
-        The AI repository implementation.
+        AIRepository instance
     """
-    global _ai_repository
-    if _ai_repository is None:
-        _ai_repository = AIRepositoryImpl()
-    return _ai_repository
+    global _ai_repository_instance
+    
+    if _ai_repository_instance is None:
+        _ai_repository_instance = AIRepositoryImpl()
+        
+    return _ai_repository_instance
 
 def get_ai_service() -> AIService:
     """
     Get the AI service instance.
     
     Returns:
-        The AI service instance
+        AIService instance
     """
-    global _ai_service
-    if _ai_service is None:
-        # Get AI repository
-        ai_repository = get_ai_repository()
-        _ai_service = AIService(ai_repository=ai_repository)
-    return _ai_service
+    global _ai_service_instance
+    
+    if _ai_service_instance is None:
+        _ai_service_instance = AIService(get_ai_repository())
+        
+    return _ai_service_instance
+
+def get_ai_file_repository() -> AIFileRepository:
+    """
+    Get the AI file repository instance.
+    
+    Returns:
+        AIFileRepository instance
+    """
+    global _ai_file_repository_instance
+    
+    if _ai_file_repository_instance is None:
+        _ai_file_repository_instance = AIFileRepositoryImpl()
+        
+    return _ai_file_repository_instance
+
+def get_ai_file_s3_repository() -> S3Repository:
+    """
+    Get the AI file S3 repository instance.
+    
+    Returns:
+        S3Repository instance
+    """
+    global _ai_file_s3_repository_instance
+    
+    if _ai_file_s3_repository_instance is None:
+        bucket_name = os.environ.get('AI_FILES_S3_BUCKET', 'ai-files')
+        _ai_file_s3_repository_instance = S3RepositoryImpl(bucket_name)
+        
+    return _ai_file_s3_repository_instance
