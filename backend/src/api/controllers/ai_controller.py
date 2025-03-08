@@ -166,6 +166,47 @@ async def get_available_parameters(
             detail=f"Error getting available parameters: {str(e)}"
         )
 
+@router.get("/configurations/{use_case}/response_format", response_model=APIResponse)
+async def get_response_format(
+    request: Request,
+    use_case: str,
+    ai_service: AIService = Depends(get_ai_service_dependency)
+):
+    """
+    Get the expected response format for a use case.
+    """
+    try:
+        # Convert string to AIUseCase enum
+        try:
+            use_case_enum = AIUseCase(use_case)
+        except ValueError:
+            logger.warning(f"Invalid use case: {use_case}")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid use case: {use_case}"
+            )
+        
+        # Get response format from the use case
+        logger.info(f"Getting response format for use case: {use_case}")
+        response_format = use_case_enum.response_format
+        logger.debug(f"Response format: {response_format}")
+        
+        return APIResponse(
+            success=True,
+            data=response_format,
+            message=f"Retrieved response format for use case: {use_case}"
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting response format: {str(e)}")
+        logger.exception("Detailed exception information:")
+        
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error getting response format: {str(e)}"
+        )
+
 @router.get("/configurations/{use_case}/{version}", response_model=APIResponse)
 async def get_configuration(
     request: Request,
