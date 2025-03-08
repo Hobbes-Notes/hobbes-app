@@ -6,7 +6,7 @@ These endpoints do not require authentication as they are used for system config
 """
 
 import logging
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from typing import List, Dict, Any
 from datetime import datetime
 
@@ -34,21 +34,37 @@ def get_ai_service_dependency() -> AIService:
 
 @router.get("/configurations/{use_case}", response_model=APIResponse)
 async def get_configurations(
-    use_case: AIUseCase,
+    request: Request,
+    use_case: str,
     ai_service: AIService = Depends(get_ai_service_dependency)
 ):
     """
     Get all configurations for a use case.
     """
     try:
-        configurations = await ai_service.get_all_configurations(use_case)
+        # Convert string to AIUseCase enum
+        try:
+            use_case_enum = AIUseCase(use_case)
+        except ValueError:
+            logger.warning(f"Invalid use case: {use_case}")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid use case: {use_case}"
+            )
+            
+        configurations = await ai_service.get_all_configurations(use_case_enum)
+        
         return APIResponse(
             success=True,
             data=configurations,
             message=f"Retrieved {len(configurations)} configurations for use case: {use_case}"
         )
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error getting configurations: {str(e)}")
+        logger.exception("Detailed exception information:")
+        
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error getting configurations: {str(e)}"
@@ -56,21 +72,37 @@ async def get_configurations(
 
 @router.get("/configurations/{use_case}/active", response_model=APIResponse)
 async def get_active_configuration(
-    use_case: AIUseCase,
+    request: Request,
+    use_case: str,
     ai_service: AIService = Depends(get_ai_service_dependency)
 ):
     """
     Get the active configuration for a use case.
     """
     try:
-        configuration = await ai_service.get_active_configuration(use_case)
+        # Convert string to AIUseCase enum
+        try:
+            use_case_enum = AIUseCase(use_case)
+        except ValueError:
+            logger.warning(f"Invalid use case: {use_case}")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid use case: {use_case}"
+            )
+            
+        configuration = await ai_service.get_active_configuration(use_case_enum)
+        
         return APIResponse(
             success=True,
             data=configuration,
             message=f"Retrieved active configuration for use case: {use_case}"
         )
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error getting active configuration: {str(e)}")
+        logger.exception("Detailed exception information:")
+        
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error getting active configuration: {str(e)}"
@@ -78,7 +110,8 @@ async def get_active_configuration(
 
 @router.get("/configurations/{use_case}/{version}", response_model=APIResponse)
 async def get_configuration(
-    use_case: AIUseCase,
+    request: Request,
+    use_case: str,
     version: int,
     ai_service: AIService = Depends(get_ai_service_dependency)
 ):
@@ -86,8 +119,20 @@ async def get_configuration(
     Get a specific configuration by use case and version.
     """
     try:
-        configuration = await ai_service.get_configuration(use_case, version)
+        # Convert string to AIUseCase enum
+        try:
+            use_case_enum = AIUseCase(use_case)
+        except ValueError:
+            logger.warning(f"Invalid use case: {use_case}")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid use case: {use_case}"
+            )
+            
+        configuration = await ai_service.get_configuration(use_case_enum, version)
+        
         if not configuration:
+            logger.warning(f"Configuration not found for use case: {use_case}, version: {version}")
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Configuration not found for use case: {use_case}, version: {version}"
@@ -102,6 +147,8 @@ async def get_configuration(
         raise
     except Exception as e:
         logger.error(f"Error getting configuration: {str(e)}")
+        logger.exception("Detailed exception information:")
+        
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error getting configuration: {str(e)}"
@@ -109,6 +156,7 @@ async def get_configuration(
 
 @router.post("/configurations", response_model=APIResponse)
 async def create_configuration(
+    request: Request,
     configuration: AIConfiguration,
     ai_service: AIService = Depends(get_ai_service_dependency)
 ):
@@ -119,17 +167,32 @@ async def create_configuration(
         # Set created_at if not provided
         if not configuration.created_at:
             configuration.created_at = datetime.now().isoformat()
+            logger.debug(f"Set created_at to {configuration.created_at}")
+        
+        logger.info(f"Creating configuration for use case: {configuration.use_case}")
+        logger.debug(f"Configuration details: model={configuration.model}, max_tokens={configuration.max_tokens}, temperature={configuration.temperature}")
         
         # Create the configuration
         created_config = await ai_service.create_configuration(configuration)
+        logger.info(f"Created configuration for use case: {created_config.use_case}, version: {created_config.version}")
         
         return APIResponse(
             success=True,
             data=created_config,
-            message=f"Created configuration for use case: {configuration.use_case}, version: {configuration.version}"
+            message=f"Created configuration for use case: {configuration.use_case}, version: {created_config.version}"
+        )
+    except ValueError as e:
+        # Handle validation errors specifically
+        logger.warning(f"Validation error creating configuration: {str(e)}")
+        
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
         )
     except Exception as e:
         logger.error(f"Error creating configuration: {str(e)}")
+        logger.exception("Detailed exception information:")
+        
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error creating configuration: {str(e)}"
@@ -137,7 +200,8 @@ async def create_configuration(
 
 @router.put("/configurations/{use_case}/{version}/activate", response_model=APIResponse)
 async def set_active_configuration(
-    use_case: AIUseCase,
+    request: Request,
+    use_case: str,
     version: int,
     ai_service: AIService = Depends(get_ai_service_dependency)
 ):
@@ -145,16 +209,32 @@ async def set_active_configuration(
     Set a configuration as active.
     """
     try:
+        # Convert string to AIUseCase enum
+        try:
+            use_case_enum = AIUseCase(use_case)
+        except ValueError:
+            logger.warning(f"Invalid use case: {use_case}")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid use case: {use_case}"
+            )
+            
         # Set the configuration as active
-        updated_config = await ai_service.set_active_configuration(use_case, version)
+        logger.info(f"Setting configuration as active for use case: {use_case}, version: {version}")
+        updated_config = await ai_service.set_active_configuration(use_case_enum, version)
+        logger.info(f"Configuration set as active for use case: {use_case}, version: {version}")
         
         return APIResponse(
             success=True,
             data=updated_config,
             message=f"Set configuration as active for use case: {use_case}, version: {version}"
         )
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error setting active configuration: {str(e)}")
+        logger.exception("Detailed exception information:")
+        
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error setting active configuration: {str(e)}"
@@ -162,7 +242,8 @@ async def set_active_configuration(
 
 @router.delete("/configurations/{use_case}/{version}", response_model=APIResponse)
 async def delete_configuration(
-    use_case: AIUseCase,
+    request: Request,
+    use_case: str,
     version: int,
     ai_service: AIService = Depends(get_ai_service_dependency)
 ):
@@ -170,14 +251,28 @@ async def delete_configuration(
     Delete a configuration.
     """
     try:
+        # Convert string to AIUseCase enum
+        try:
+            use_case_enum = AIUseCase(use_case)
+        except ValueError:
+            logger.warning(f"Invalid use case: {use_case}")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid use case: {use_case}"
+            )
+            
         # Delete the configuration
-        success = await ai_service.delete_configuration(use_case, version)
+        logger.info(f"Deleting configuration for use case: {use_case}, version: {version}")
+        success = await ai_service.delete_configuration(use_case_enum, version)
         
         if not success:
+            logger.warning(f"Could not delete configuration for use case: {use_case}, version: {version}")
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Could not delete configuration. It may be active or not exist."
             )
+        
+        logger.info(f"Deleted configuration for use case: {use_case}, version: {version}")
         
         return APIResponse(
             success=True,
@@ -188,7 +283,57 @@ async def delete_configuration(
         raise
     except Exception as e:
         logger.error(f"Error deleting configuration: {str(e)}")
+        logger.exception("Detailed exception information:")
+        
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error deleting configuration: {str(e)}"
+        )
+
+@router.get("/configurations/{use_case}/parameters", response_model=APIResponse)
+async def get_available_parameters(
+    request: Request,
+    use_case: str,
+    ai_service: AIService = Depends(get_ai_service_dependency)
+):
+    """
+    Get available parameters for a use case.
+    """
+    try:
+        # Convert string to AIUseCase enum
+        try:
+            use_case_enum = AIUseCase(use_case)
+        except ValueError:
+            logger.warning(f"Invalid use case: {use_case}")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid use case: {use_case}"
+            )
+        
+        # Get parameter descriptions from the use case
+        logger.info(f"Getting parameter descriptions for use case: {use_case}")
+        param_descriptions = use_case_enum.param_descriptions
+        logger.debug(f"Parameter descriptions: {json.dumps(param_descriptions, default=str)}")
+        
+        # Create a list of parameter objects with name and description
+        parameters = [
+            {"name": param, "description": description}
+            for param, description in param_descriptions.items()
+        ]
+        logger.info(f"Found {len(parameters)} parameters for use case: {use_case}")
+        
+        return APIResponse(
+            success=True,
+            data=parameters,
+            message=f"Retrieved available parameters for use case: {use_case}"
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting available parameters: {str(e)}")
+        logger.exception("Detailed exception information:")
+        
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error getting available parameters: {str(e)}"
         ) 

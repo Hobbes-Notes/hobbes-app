@@ -1,5 +1,9 @@
 import { useCallback } from 'react';
 import { useAuth } from '../hooks/useAuth';
+import { createLogger } from '../utils/logging';
+
+// Create a logger for the API service
+const logger = createLogger('API Service');
 
 // Utility for generating correlation IDs
 const generateCorrelationId = () => {
@@ -21,36 +25,27 @@ const formatErrorDetails = (error) => {
 };
 
 const logError = (context, error) => {
-  if (process.env.NODE_ENV === 'development') {
-    console.group(`🔴 API Error: ${context}`);
-    console.error('Error Details:', formatErrorDetails(error));
-    console.error('Stack:', error.stack);
-    console.groupEnd();
-  }
+  logger.logError(`${context} - Error`, formatErrorDetails(error));
 };
 
 const logRequest = (config) => {
-  if (process.env.NODE_ENV === 'development') {
-    console.group(`🔵 API Request: ${config.method?.toUpperCase()} ${config.url}`);
-    console.log('Correlation ID:', config.correlationId);
-    console.log('Timestamp:', new Date().toISOString());
-    console.log('Headers:', config.headers);
-    if (config.data) console.log('Data:', config.data);
-    if (config.params) console.log('Params:', config.params);
-    console.groupEnd();
-  }
+  logger.log(`Request: ${config.method?.toUpperCase()} ${config.url}`, {
+    correlationId: config.correlationId,
+    timestamp: new Date().toISOString(),
+    headers: config.headers,
+    data: config.data,
+    params: config.params
+  });
 };
 
 const logResponse = (response) => {
-  if (process.env.NODE_ENV === 'development') {
-    const duration = Date.now() - response.config.requestTime;
-    console.group(`🟢 API Response: ${response.config.method?.toUpperCase()} ${response.config.url}`);
-    console.log('Correlation ID:', response.config.correlationId);
-    console.log('Status:', response.status);
-    console.log('Duration:', `${duration}ms`);
-    console.log('Data:', response.data);
-    console.groupEnd();
-  }
+  const duration = Date.now() - response.config.requestTime;
+  logger.log(`Response: ${response.config.method?.toUpperCase()} ${response.config.url}`, {
+    correlationId: response.config.correlationId,
+    status: response.status,
+    duration: `${duration}ms`,
+    data: response.data
+  });
 };
 
 // API Hook for internal use
@@ -201,6 +196,10 @@ export const useApiService = () => {
 
     deleteAIConfiguration: useCallback(async (useCase, version) => {
       return unauthenticatedApi.delete(`/ai/configurations/${useCase}/${version}`);
+    }, [unauthenticatedApi]),
+
+    getAIConfigurationParameters: useCallback(async (useCase) => {
+      return unauthenticatedApi.get(`/ai/configurations/${useCase}/parameters`);
     }, [unauthenticatedApi])
   };
 };

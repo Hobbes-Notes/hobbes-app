@@ -147,10 +147,13 @@ class NoteService:
                             
                             # Generate summary
                             logger.info(f"Calling AI service to generate summary for project {project.id}")
-                            new_summary = await self.ai_service.generate_project_summary(
-                                project, 
-                                extracted_content
-                            )
+                            new_summary = await self.ai_service.generate_project_summary({
+                                "project_id": project.id,
+                                "project_name": project.name,
+                                "project_description": project.description,
+                                "current_summary": project.summary,
+                                "note_content": extracted_content
+                            })
                             
                             # Update project
                             logger.info(f"Updating project {project.id} with new summary")
@@ -235,8 +238,9 @@ class NoteService:
             try:
                 # Prepare parameters for extraction
                 params = {
-                    "content": note.content,
-                    "project": self._convert_to_dict(project),
+                    "note_content": note.content,
+                    "project_name": project.name,
+                    "project_description": project.description or "",
                     "user_id": note.user_id
                 }
                 logger.debug(f"Checking relevance for project {project.id} - '{project.name}'")
@@ -304,17 +308,20 @@ class NoteService:
         for project in projects:
             project_id = getattr(project, 'id', None)
             
-            # Convert project to dict if it's a domain model
-            project_dict = self._convert_to_dict(project)
-            
             # Get the extraction result for this project
             extraction = extractions.get(project_id)
             
+            # Prepare parameters for the AI service
+            params = {
+                "project_id": project_id,
+                "project_name": project.name,
+                "project_description": project.description or "",
+                "current_summary": project.summary or "",
+                "note_content": extraction.extracted_content
+            }
+            
             # Generate the new summary using the extracted content
-            new_summary = await self.ai_service.generate_project_summary(
-                project_dict, 
-                extraction.extracted_content
-            )
+            new_summary = await self.ai_service.generate_project_summary(params)
             
             # Create a ProjectUpdate object with the new summary
             update_data = ProjectUpdate(summary=new_summary)
