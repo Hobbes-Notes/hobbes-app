@@ -57,6 +57,7 @@ clean: check-docker
 clear-data: stop
 	@echo "Clearing all data..."
 	rm -rf .dynamodb/*
+	rm -rf localstack/*
 	@echo "Data cleared successfully!"
 
 # Ingest sample data
