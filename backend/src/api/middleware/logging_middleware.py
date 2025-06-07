@@ -37,26 +37,23 @@ class LoggingMiddleware(BaseHTTPMiddleware):
         path = request.url.path
         method = request.method
         
-        # Only log AI-related endpoints
-        if '/ai/' in path:
-            # Log request
-            await self._log_request(request)
+        # Log all endpoints for debugging
+        # Log request
+        await self._log_request(request)
         
         # Process the request
         try:
             response = await call_next(request)
             
-            # Only log AI-related endpoints
-            if '/ai/' in path:
-                # Log response
-                duration_ms = (time.time() - start_time) * 1000
-                self._log_response(path, method, response.status_code, duration_ms)
+            # Log all endpoints for debugging
+            # Log response
+            duration_ms = (time.time() - start_time) * 1000
+            self._log_response(path, method, response.status_code, duration_ms)
                 
             return response
         except Exception as e:
             # Log exception
-            if '/ai/' in path:
-                logger.exception(f"Exception processing request: {path} {method}")
+            logger.exception(f"Exception processing request: {path} {method}")
                 
             # Re-raise the exception
             raise

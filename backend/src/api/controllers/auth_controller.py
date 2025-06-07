@@ -22,8 +22,8 @@ async def get_current_user(
 
 @router.post("/google", response_model=Dict)
 async def google_auth(
+    response: Response,
     token: Dict[str, str] = Body(...), 
-    response: Response = None,
     auth_service: AuthService = Depends(get_auth_service)
 ):
     if not token or 'token' not in token:
