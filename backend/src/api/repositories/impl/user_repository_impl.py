@@ -47,8 +47,11 @@ class UserRepositoryImpl(UserRepository):
     
     async def create_user(self, user_data: UserCreate) -> User:
         try:
+            from datetime import datetime
             # Convert to dict for DynamoDB
             user_dict = user_data.dict()
+            # Add created_at timestamp
+            user_dict['created_at'] = datetime.utcnow().isoformat()
             self.dynamodb_client.put_item(table_name='Users', item=user_dict)
             return self._dict_to_user(user_dict)
         except Exception as e:

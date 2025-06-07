@@ -16,10 +16,10 @@ const api = axios.create({
   withCredentials: true // Important for cookies
 });
 
-// Create unauthenticated axios instance for AI configuration endpoints
+// Create unauthenticated axios instance for AI configuration endpoints and OAuth
 const unauthenticatedApi = axios.create({
   baseURL: API_URL,
-  withCredentials: false // No credentials needed for AI endpoints
+  withCredentials: false // No credentials needed for AI endpoints and OAuth
 });
 
 export const AuthProvider = ({ children }) => {
@@ -193,7 +193,18 @@ export const AuthProvider = ({ children }) => {
   const handleLoginSuccess = async (tokenResponse) => {
     try {
       console.log('Google login response:', tokenResponse);
-      const result = await api.post('/auth/google', {
+      
+      // Create a dedicated axios instance for OAuth with specific configuration
+      const oauthApi = axios.create({
+        baseURL: API_URL,
+        withCredentials: true,
+        timeout: 10000,
+        headers: {
+          'Content-Type': 'application/json',
+        }
+      });
+      
+      const result = await oauthApi.post('/auth/google', {
         token: tokenResponse.access_token
       });
       
@@ -204,6 +215,12 @@ export const AuthProvider = ({ children }) => {
       navigate('/projects');
     } catch (error) {
       console.error('Login failed:', error);
+      console.error('Error details:', {
+        message: error.message,
+        response: error.response?.data,
+        status: error.response?.status,
+        config: error.config
+      });
       setError(error.response?.data?.detail || 'Failed to login. Please try again.');
       throw error;
     }

@@ -47,11 +47,12 @@ class AuthService:
             # Verify token with Google - use userinfo endpoint for access tokens
             response = http_requests.get(
                 'https://www.googleapis.com/oauth2/v3/userinfo',
-                headers={'Authorization': f'Bearer {token}'}
+                headers={'Authorization': f'Bearer {token}'},
+                timeout=10  # Add 10 second timeout
             )
             
             if response.status_code != 200:
-                logger.error(f"Invalid Google token: {response.text}")
+                logger.error(f"Invalid Google token: Status {response.status_code}, Response: {response.text}")
                 return None
                 
             userinfo = response.json()
@@ -64,6 +65,7 @@ class AuthService:
             
             if not user:
                 # Create new user
+                from datetime import datetime
                 user_create = UserCreate(
                     id=user_id,
                     email=userinfo.get('email', ''),
@@ -76,6 +78,12 @@ class AuthService:
                 logger.info(f"Created new user: {user.id}")
             
             return user
+        except http_requests.exceptions.Timeout as e:
+            logger.error(f"Timeout validating Google token: {str(e)}")
+            return None
+        except http_requests.exceptions.ConnectionError as e:
+            logger.error(f"Connection error validating Google token: {str(e)}")
+            return None
         except Exception as e:
             logger.error(f"Error validating Google token: {str(e)}")
             return None

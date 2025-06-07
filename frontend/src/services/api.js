@@ -51,69 +51,13 @@ const logResponse = (response) => {
 // API Hook for internal use
 export const useApi = () => {
   const { getApi } = useAuth();
-  const api = getApi();
-
-  // Request interceptor with correlation ID and timing
-  api.interceptors.request.use(
-    (config) => {
-      config.correlationId = generateCorrelationId();
-      config.requestTime = Date.now();
-      logRequest(config);
-      return config;
-    },
-    (error) => {
-      logError('Request Interceptor', error);
-      return Promise.reject(error);
-    }
-  );
-
-  // Response interceptor with timing and error handling
-  api.interceptors.response.use(
-    (response) => {
-      logResponse(response);
-      return response;
-    },
-    (error) => {
-      logError('Response Interceptor', error);
-      return Promise.reject(error);
-    }
-  );
-
-  return api;
+  return getApi();
 };
 
 // Create an unauthenticated API client for AI configuration endpoints
 export const useUnauthenticatedApi = () => {
   const { getUnauthenticatedApi } = useAuth();
-  const api = getUnauthenticatedApi();
-
-  // Request interceptor with correlation ID and timing
-  api.interceptors.request.use(
-    (config) => {
-      config.correlationId = generateCorrelationId();
-      config.requestTime = Date.now();
-      logRequest(config);
-      return config;
-    },
-    (error) => {
-      logError('Request Interceptor', error);
-      return Promise.reject(error);
-    }
-  );
-
-  // Response interceptor with timing and error handling
-  api.interceptors.response.use(
-    (response) => {
-      logResponse(response);
-      return response;
-    },
-    (error) => {
-      logError('Response Interceptor', error);
-      return Promise.reject(error);
-    }
-  );
-
-  return api;
+  return getUnauthenticatedApi();
 };
 
 // Export individual API functions that use the hook internally
