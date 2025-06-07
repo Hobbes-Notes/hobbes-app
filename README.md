@@ -70,8 +70,35 @@ PROJECT SETUP
 
 DAILY USAGE
 -----------
-- Start: make start
-- Stop: make stop
-- Restart: make restart
-- View logs: make logs
-- Clean (when dependencies change): make clean
+**🚀 Self-Healing Development (Recommended)**
+- Dev start: `make dev-start` (validates environment, auto-fixes issues)
+- Cursor setup: `make dev-setup` (for local Python development)
+- Reset everything: `make dev-reset` (nuclear option when things break)
+
+**🔧 Standard Commands**
+- Start: `make start`
+- Stop: `make stop`
+- Restart: `make restart`
+- View logs: `make logs`
+- Clean: `make clean`
+- Deploy: `make deploy` (production-ready with health checks)
+
+**🔍 Debugging & Validation**
+- System check: `make system-check` (comprehensive validation)
+- Environment check: `make validate-env` (Python, venv, .env files)
+- Docker check: `make check-docker` (Docker installation & status)
+- Setup venv: `make setup-venv` (create virtual environment)
+- Status check: `make status` (running containers)
+- Backend health: `curl http://localhost:8888/health`
+
+**💡 For Non-Coders with Cursor**
+1. Run `make system-check` (validates everything)
+2. Run `make dev-setup` once
+3. Use `make dev-start` daily
+4. If anything breaks: `make dev-reset`
+
+**🔄 Version Philosophy**
+- **Latest stable versions** for security and performance
+- **Consistency across environments** (Docker, local, Cursor)
+- **No hard version locks** - works with Python 3.9+ to latest
+- **Easy updates** - see `VERSION_STRATEGY.md` for details

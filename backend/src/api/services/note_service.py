@@ -20,6 +20,8 @@ from ..services.project_service import ProjectService
 from ..models.project import Project, ProjectRef, ProjectUpdate
 from ..services.ai_service import AIService
 from ..models.ai import RelevanceExtraction
+# from ..services.action_item_service import ActionItemService
+# from ..models.action_item import ActionItemCreate, ActionItemUpdate
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -37,7 +39,8 @@ class NoteService:
         note_repository: Optional[NoteRepository] = None,
         project_repository: Optional[ProjectRepository] = None,
         project_service: Optional[ProjectService] = None,
-        ai_service: Optional[AIService] = None
+        ai_service: Optional[AIService] = None,
+        action_item_service: Optional[object] = None
     ):
         """
         Initialize the NoteService with repositories and services.
@@ -47,11 +50,13 @@ class NoteService:
             project_repository: Repository for project operations
             project_service: Service for project operations
             ai_service: Service for AI operations (optional)
+            action_item_service: Service for action item operations (optional)
         """
         self.note_repository = note_repository
         self.project_repository = project_repository
         self.project_service = project_service
         self.ai_service = ai_service or AIService()
+        self.action_item_service = action_item_service
     
     async def get_note(self, note_id: str) -> Note:
         """
@@ -118,63 +123,156 @@ class NoteService:
             created_note = await self.note_repository.create(note_data)
             logger.info(f"Successfully created note with ID: {created_note.id}")
             
-            # Find relevant projects
-            if self.ai_service:
-                logger.info(f"AI service available, finding relevant projects for note {created_note.id}")
+            # CapA: Manage Action Items based on note content (temporarily disabled)
+            if False and self.ai_service and self.action_item_service:
+                logger.info(f"Starting CapA: Action item management for note {created_note.id}")
                 try:
-                    logger.debug(f"Calling _find_relevant_projects for note {created_note.id}")
-                    relevant_projects = await self._find_relevant_projects(created_note)
-                    logger.info(f"Found {len(relevant_projects)} relevant projects for note {created_note.id}")
+                    # Get existing action items for the user
+                    existing_action_items = await self.action_item_service.get_action_items_by_user(note_data.user_id)
+                    logger.debug(f"Found {len(existing_action_items)} existing action items")
                     
-                    # Associate note with relevant projects
-                    for idx, (project, extracted_content) in enumerate(relevant_projects):
-                        logger.info(f"Processing association {idx+1}/{len(relevant_projects)}: note {created_note.id} with project {project.id} - '{project.name}'")
+                    # Prepare data for AI service (no user_projects needed for CapA)
+                    existing_action_items_json = json.dumps([
+                        {
+                            "id": item.id,
+                            "task": item.task,
+                            "doer": item.doer,
+                            "deadline": item.deadline,
+                            "theme": item.theme,
+                            "context": item.context,
+                            "extracted_entities": item.extracted_entities,
+                            "status": item.status,
+                            "type": item.type,
+                            "projects": item.projects
+                        } for item in existing_action_items
+                    ])
+                    
+                    # Call CapA (focused only on action management)
+                    action_operations = await self.ai_service.manage_action_items({
+                        "note_content": created_note.content,
+                        "existing_action_items": existing_action_items_json,
+                        "user_id": note_data.user_id
+                    })
+                    
+                    logger.info(f"CapA suggested {len(action_operations)} action operations")
+                    
+                    # Process action operations
+                    for operation in action_operations:
+                        action_type = operation.get("action", "new")
                         
-                        logger.debug(f"Calling repository to associate note {created_note.id} with project {project.id}")
-                        await self.note_repository.associate_note_with_project(
-                            created_note.id, 
-                            project.id, 
-                            extracted_content
-                        )
-                        logger.info(f"Successfully associated note {created_note.id} with project {project.id}")
-                        
-                        # Update project summary if AI service is available
-                        try:
-                            logger.info(f"Starting project summary update for project {project.id} - '{project.name}'")
-                            
-                            # Use the extracted content from the current note
-                            logger.debug(f"Using extracted content from current note for project {project.id}")
-                            logger.debug(f"Extracted content length: {len(extracted_content)} chars")
-                            
-                            # Generate summary
-                            logger.info(f"Calling AI service to generate summary for project {project.id}")
-                            new_summary = await self.ai_service.generate_project_summary({
-                                "project_id": project.id,
-                                "project_name": project.name,
-                                "project_description": project.description,
-                                "current_summary": project.summary,
-                                "note_content": extracted_content
-                            })
-                            
-                            # Update project
-                            logger.info(f"Updating project {project.id} with new summary")
-                            await self.project_service.update_project(
-                                project.id,
-                                ProjectUpdate(summary=new_summary)
+                        if action_type == "new":
+                            # Create new action item
+                            action_create = ActionItemCreate(
+                                task=operation.get("task", ""),
+                                doer=operation.get("doer"),
+                                deadline=operation.get("deadline"),
+                                theme=operation.get("theme"),
+                                context=operation.get("context"),
+                                extracted_entities=operation.get("extracted_entities", {}),
+                                status=operation.get("status", "open"),
+                                type=operation.get("type", "task"),
+                                projects=[],  # CapA doesn't handle project tagging - will be done by CapB
+                                user_id=note_data.user_id
                             )
-                            logger.info(f"Successfully updated summary for project {project.id}")
-                        except Exception as e:
-                            logger.error(f"Error updating project summary for project {project.id}: {str(e)}")
-                            logger.exception(f"Detailed exception information for project summary update:")
+                            new_item = await self.action_item_service.create_action_item(action_create)
+                            logger.info(f"Created new action item: {new_item.id} - {new_item.task[:50]}...")
+                            
+                        elif action_type in ["update", "complete"]:
+                            # Update existing action item
+                            item_id = operation.get("id")
+                            if item_id:
+                                update_data = ActionItemUpdate()
+                                
+                                if action_type == "complete":
+                                    update_data.status = "completed"
+                                else:
+                                    # Update other fields
+                                    if operation.get("task"):
+                                        update_data.task = operation.get("task")
+                                    if operation.get("doer"):
+                                        update_data.doer = operation.get("doer")
+                                    if operation.get("deadline"):
+                                        update_data.deadline = operation.get("deadline")
+                                    if operation.get("theme"):
+                                        update_data.theme = operation.get("theme")
+                                    if operation.get("context"):
+                                        update_data.context = operation.get("context")
+                                    if operation.get("extracted_entities"):
+                                        update_data.extracted_entities = operation.get("extracted_entities")
+                                    if operation.get("type"):
+                                        update_data.type = operation.get("type")
+                                    # Note: Not updating projects field - CapB will handle project tagging
+                                
+                                updated_item = await self.action_item_service.update_action_item(item_id, update_data)
+                                if updated_item:
+                                    logger.info(f"{action_type.capitalize()}d action item: {item_id} - {updated_item.task[:50]}...")
+                                else:
+                                    logger.warning(f"Could not find action item to {action_type}: {item_id}")
+                    
                 except Exception as e:
-                    logger.error(f"Error finding relevant projects for note {created_note.id}: {str(e)}")
-                    logger.exception("Detailed exception information for finding relevant projects:")
+                    logger.error(f"Error in CapA action management for note {created_note.id}: {str(e)}")
+                    logger.exception("Detailed exception information for CapA:")
             else:
-                logger.info(f"AI service not available, skipping project relevance check for note {created_note.id}")
+                logger.info(f"AI service or action item service not available, skipping CapA")
+            
+            # OLD C1 FLOW - COMMENTED OUT FOR NEW APPROACH
+            # # Find relevant projects
+            # if self.ai_service:
+            #     logger.info(f"AI service available, finding relevant projects for note {created_note.id}")
+            #     try:
+            #         logger.debug(f"Calling _find_relevant_projects for note {created_note.id}")
+            #         relevant_projects = await self._find_relevant_projects(created_note)
+            #         logger.info(f"Found {len(relevant_projects)} relevant projects for note {created_note.id}")
+            #         
+            #         # Associate note with relevant projects
+            #         for idx, (project, extracted_content) in enumerate(relevant_projects):
+            #             logger.info(f"Processing association {idx+1}/{len(relevant_projects)}: note {created_note.id} with project {project.id} - '{project.name}'")
+            #             
+            #             logger.debug(f"Calling repository to associate note {created_note.id} with project {project.id}")
+            #             await self.note_repository.associate_note_with_project(
+            #                 created_note.id, 
+            #                 project.id, 
+            #                 extracted_content
+            #             )
+            #             logger.info(f"Successfully associated note {created_note.id} with project {project.id}")
+            #             
+            #             # Update project summary if AI service is available
+            #             try:
+            #                 logger.info(f"Starting project summary update for project {project.id} - '{project.name}'")
+            #                 
+            #                 # Use the extracted content from the current note
+            #                 logger.debug(f"Using extracted content from current note for project {project.id}")
+            #                 logger.debug(f"Extracted content length: {len(extracted_content)} chars")
+            #                 
+            #                 # Generate summary
+            #                 logger.info(f"Calling AI service to generate summary for project {project.id}")
+            #                 new_summary = await self.ai_service.generate_project_summary({
+            #                     "project_id": project.id,
+            #                     "project_name": project.name,
+            #                     "project_description": project.description,
+            #                     "current_summary": project.summary,
+            #                     "note_content": extracted_content
+            #                 })
+            #                 
+            #                 # Update project
+            #                 logger.info(f"Updating project {project.id} with new summary")
+            #                 await self.project_service.update_project(
+            #                     project.id,
+            #                     ProjectUpdate(summary=new_summary)
+            #                 )
+            #                 logger.info(f"Successfully updated summary for project {project.id}")
+            #             except Exception as e:
+            #                 logger.error(f"Error updating project summary for project {project.id}: {str(e)}")
+            #                 logger.exception(f"Detailed exception information for project summary update:")
+            #     except Exception as e:
+            #         logger.error(f"Error finding relevant projects for note {created_note.id}: {str(e)}")
+            #         logger.exception("Detailed exception information for finding relevant projects:")
+            # else:
+            #     logger.info(f"AI service not available, skipping project relevance check for note {created_note.id}")
             
             logger.info(f"Note creation process completed successfully for note {created_note.id}")
             
-            # Fetch the projects for the note before returning it
+            # Fetch the projects for the note before returning it (currently empty since we commented out C1)
             logger.debug(f"Fetching projects for note {created_note.id} before returning")
             projects_refs = await self.note_repository.get_projects_for_note(created_note.id)
             created_note.projects = projects_refs

@@ -18,7 +18,7 @@ from ..repositories.ai_file_repository import AIFileRepository
 from ..repositories.s3_repository import S3Repository
 from ..services.ai_service import AIService
 from ..models.ai import AIUseCase, AIConfiguration
-from infrastructure.sqs_client import get_sqs_client
+from ...infrastructure.sqs_client import get_sqs_client
 
 # Set up logging
 logger = logging.getLogger(__name__)

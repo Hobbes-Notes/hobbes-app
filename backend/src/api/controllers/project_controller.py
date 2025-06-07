@@ -9,10 +9,13 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-project_service = ProjectService()
+_project_service = None
 
 def get_project_service() -> ProjectService:
-    return project_service
+    global _project_service
+    if _project_service is None:
+        _project_service = ProjectService()
+    return _project_service
 
 @router.get("/projects/{project_id}", response_model=Project)
 async def get_project(

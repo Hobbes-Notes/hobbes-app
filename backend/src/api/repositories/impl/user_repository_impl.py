@@ -1,3 +1,9 @@
+"""
+User Repository Implementation
+
+This module provides a DynamoDB implementation of the user repository interface.
+"""
+
 import logging
 from typing import Optional, Dict
 
