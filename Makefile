@@ -1,4 +1,5 @@
-.PHONY: start stop restart status logs clean build init check-docker install-backend clear-data ingest-data
+
+.PHONY: start stop restart status logs clean build init check-docker
 
 # Check if Docker is running
 check-docker:
@@ -10,11 +11,6 @@ check-docker:
 		echo "3. If using Linux, your user is in the 'docker' group or you're using sudo"; \
 		exit 1; \
 	fi
-
-# Install backend dependencies
-install-backend:
-	@echo "Installing backend dependencies..."
-	cd backend && pip install -r requirements.txt
 
 # Start the application
 start: check-docker
@@ -53,17 +49,6 @@ clean: check-docker
 	rm -rf backend/src/api/__pycache__
 	@echo "Cleanup complete!"
 
-# Clear all data
-clear-data: stop
-	@echo "Clearing all data..."
-	rm -rf .dynamodb/*
-	@echo "Data cleared successfully!"
-
-# Ingest sample data
-ingest-data:
-	@echo "Ingesting sample data..."
-	python3 scripts/ingest_notes.py
-
 # Build containers
 build: check-docker
 	@echo "Building containers..."
@@ -71,7 +56,7 @@ build: check-docker
 	@echo "Build complete!"
 
 # Initialize the application (first time setup)
-init: check-docker install-backend
+init: check-docker
 	@echo "Initializing application..."
 	@if [ ! -f .env ]; then \
 		echo "Creating .env file..."; \
