@@ -1,4 +1,3 @@
-
 .PHONY: start stop restart status logs clean build init check-docker
 
 # Check if Docker is running
@@ -48,6 +47,18 @@ clean: check-docker
 	rm -rf backend/src/__pycache__
 	rm -rf backend/src/api/__pycache__
 	@echo "Cleanup complete!"
+
+# Clear all data
+clear-data: stop
+	@echo "Clearing all data..."
+	rm -rf .dynamodb/*
+	rm -rf localstack/*
+	@echo "Data cleared successfully!"
+
+# Ingest sample data
+ingest-data:
+	@echo "Ingesting sample data..."
+	python3 scripts/ingest_notes.py
 
 # Build containers
 build: check-docker

@@ -79,7 +79,7 @@ const ProfilePage = () => {
   };
 
   const handleBack = () => {
-    navigate(-1);
+    navigate('/');
   };
 
   if (loading) {
@@ -114,7 +114,7 @@ const ProfilePage = () => {
           >
             <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
           </svg>
-          Back
+          Back to Home
         </button>
       </div>
 
