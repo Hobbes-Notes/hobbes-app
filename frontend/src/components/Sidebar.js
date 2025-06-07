@@ -6,7 +6,7 @@ import { PlusIcon } from 'lucide-react';
 import ProjectFormModal from './ProjectFormModal';
 import ProjectTreeItem from './ProjectTreeItem';
 
-const Sidebar = ({ projects, onProjectCreated, onProjectDeleted }) => {
+const Sidebar = ({ projects = [], onProjectCreated, onProjectDeleted }) => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
@@ -114,7 +114,7 @@ const Sidebar = ({ projects, onProjectCreated, onProjectDeleted }) => {
     setShowProjectForm(true);
   };
 
-  // Get root level projects
+  // Filter root projects (those without a parent)
   const rootProjects = projects.filter(p => !p.parent_id);
 
   return (
@@ -199,6 +199,16 @@ const Sidebar = ({ projects, onProjectCreated, onProjectDeleted }) => {
             }`}
           >
             Profile
+          </Link>
+          <Link
+            to="/ai-config"
+            className={`block w-full text-left px-2 py-1.5 text-sm rounded ${
+              location.pathname === '/ai-config'
+                ? 'bg-blue-50 text-blue-700'
+                : 'text-gray-600 hover:bg-gray-50'
+            }`}
+          >
+            AI Configuration
           </Link>
           <button
             onClick={handleLogout}

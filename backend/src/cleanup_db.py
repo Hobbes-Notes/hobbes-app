@@ -1,7 +1,7 @@
-import boto3
 import os
 from dotenv import load_dotenv
 import logging
+from infrastructure.dynamodb_client import get_dynamodb_client
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -12,45 +12,37 @@ load_dotenv()
 
 def cleanup_tables():
     # Initialize DynamoDB client
-    dynamodb = boto3.resource(
-        'dynamodb',
-        aws_access_key_id=os.getenv('AWS_ACCESS_KEY_ID'),
-        aws_secret_access_key=os.getenv('AWS_SECRET_ACCESS_KEY'),
-        region_name=os.getenv('AWS_REGION', 'us-west-2')
-    )
+    dynamodb_client = get_dynamodb_client()
 
     # Clean up Projects table
     try:
-        projects_table = dynamodb.Table('Projects')
         # Scan all items
-        response = projects_table.scan()
+        response = dynamodb_client.scan(table_name='Projects')
         items = response.get('Items', [])
         
         # Delete each item
-        with projects_table.batch_writer() as batch:
-            for item in items:
-                batch.delete_item(Key={'id': item['id']})
+        for item in items:
+            dynamodb_client.delete_item(
+                table_name='Projects',
+                key={'id': item['id']}
+            )
         
         logger.info(f"Successfully deleted {len(items)} projects")
     except Exception as e:
         logger.error(f"Error cleaning up Projects table: {str(e)}")
 
-    # Clean up Notes table with new structure
+    # Clean up Notes table
     try:
-        notes_table = dynamodb.Table('Notes')
         # Scan all items
-        response = notes_table.scan()
+        response = dynamodb_client.scan(table_name='Notes')
         items = response.get('Items', [])
         
-        # Delete each item using new key schema
-        with notes_table.batch_writer() as batch:
-            for item in items:
-                batch.delete_item(
-                    Key={
-                        'id': item['id'],
-                        'created_at': item['created_at']
-                    }
-                )
+        # Delete each item
+        for item in items:
+            dynamodb_client.delete_item(
+                table_name='Notes',
+                key={'id': item['id']}
+            )
         
         logger.info(f"Successfully deleted {len(items)} notes")
     except Exception as e:

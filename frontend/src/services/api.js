@@ -1,5 +1,9 @@
 import { useCallback } from 'react';
 import { useAuth } from '../hooks/useAuth';
+import { createLogger } from '../utils/logging';
+
+// Create a logger for the API service
+const logger = createLogger('API Service');
 
 // Utility for generating correlation IDs
 const generateCorrelationId = () => {
@@ -21,36 +25,27 @@ const formatErrorDetails = (error) => {
 };
 
 const logError = (context, error) => {
-  if (process.env.NODE_ENV === 'development') {
-    console.group(`🔴 API Error: ${context}`);
-    console.error('Error Details:', formatErrorDetails(error));
-    console.error('Stack:', error.stack);
-    console.groupEnd();
-  }
+  logger.logError(`${context} - Error`, formatErrorDetails(error));
 };
 
 const logRequest = (config) => {
-  if (process.env.NODE_ENV === 'development') {
-    console.group(`🔵 API Request: ${config.method?.toUpperCase()} ${config.url}`);
-    console.log('Correlation ID:', config.correlationId);
-    console.log('Timestamp:', new Date().toISOString());
-    console.log('Headers:', config.headers);
-    if (config.data) console.log('Data:', config.data);
-    if (config.params) console.log('Params:', config.params);
-    console.groupEnd();
-  }
+  logger.log(`Request: ${config.method?.toUpperCase()} ${config.url}`, {
+    correlationId: config.correlationId,
+    timestamp: new Date().toISOString(),
+    headers: config.headers,
+    data: config.data,
+    params: config.params
+  });
 };
 
 const logResponse = (response) => {
-  if (process.env.NODE_ENV === 'development') {
-    const duration = Date.now() - response.config.requestTime;
-    console.group(`🟢 API Response: ${response.config.method?.toUpperCase()} ${response.config.url}`);
-    console.log('Correlation ID:', response.config.correlationId);
-    console.log('Status:', response.status);
-    console.log('Duration:', `${duration}ms`);
-    console.log('Data:', response.data);
-    console.groupEnd();
-  }
+  const duration = Date.now() - response.config.requestTime;
+  logger.log(`Response: ${response.config.method?.toUpperCase()} ${response.config.url}`, {
+    correlationId: response.config.correlationId,
+    status: response.status,
+    duration: `${duration}ms`,
+    data: response.data
+  });
 };
 
 // API Hook for internal use
@@ -87,9 +82,44 @@ export const useApi = () => {
   return api;
 };
 
+// Create an unauthenticated API client for AI configuration endpoints
+export const useUnauthenticatedApi = () => {
+  const { getUnauthenticatedApi } = useAuth();
+  const api = getUnauthenticatedApi();
+
+  // Request interceptor with correlation ID and timing
+  api.interceptors.request.use(
+    (config) => {
+      config.correlationId = generateCorrelationId();
+      config.requestTime = Date.now();
+      logRequest(config);
+      return config;
+    },
+    (error) => {
+      logError('Request Interceptor', error);
+      return Promise.reject(error);
+    }
+  );
+
+  // Response interceptor with timing and error handling
+  api.interceptors.response.use(
+    (response) => {
+      logResponse(response);
+      return response;
+    },
+    (error) => {
+      logError('Response Interceptor', error);
+      return Promise.reject(error);
+    }
+  );
+
+  return api;
+};
+
 // Export individual API functions that use the hook internally
 export const useApiService = () => {
   const api = useApi();
+  const unauthenticatedApi = useUnauthenticatedApi();
 
   return {
     // Projects
@@ -135,8 +165,71 @@ export const useApiService = () => {
       return api.get(`/notes/${id}`);
     }, [api]),
 
-    createNote: useCallback(async (content, user_id) => {
-      return api.post('/notes', { content, user_id });
+    createNote: useCallback(async (content, user_id, project_id = null) => {
+      const noteData = { content, user_id };
+      if (project_id) {
+        noteData.project_id = project_id;
+      }
+      return api.post('/notes', noteData);
+    }, [api]),
+
+    // AI Configurations (using unauthenticated API)
+    getAllAIConfigurations: useCallback(async (useCase) => {
+      return unauthenticatedApi.get(`/ai/configurations/${useCase}`);
+    }, [unauthenticatedApi]),
+
+    getActiveAIConfiguration: useCallback(async (useCase) => {
+      return unauthenticatedApi.get(`/ai/configurations/${useCase}/active`);
+    }, [unauthenticatedApi]),
+
+    getAIConfiguration: useCallback(async (useCase, version) => {
+      return unauthenticatedApi.get(`/ai/configurations/${useCase}/${version}`);
+    }, [unauthenticatedApi]),
+
+    createAIConfiguration: useCallback(async (configuration) => {
+      return unauthenticatedApi.post('/ai/configurations', configuration);
+    }, [unauthenticatedApi]),
+
+    setActiveAIConfiguration: useCallback(async (useCase, version) => {
+      return unauthenticatedApi.put(`/ai/configurations/${useCase}/${version}/activate`);
+    }, [unauthenticatedApi]),
+
+    deleteAIConfiguration: useCallback(async (useCase, version) => {
+      return unauthenticatedApi.delete(`/ai/configurations/${useCase}/${version}`);
+    }, [unauthenticatedApi]),
+
+    getAIConfigurationParameters: useCallback(async (useCase) => {
+      return unauthenticatedApi.get(`/ai/configurations/${useCase}/parameters`);
+    }, [unauthenticatedApi]),
+
+    getAIConfigurationResponseFormat: useCallback(async (useCase) => {
+      return unauthenticatedApi.get(`/ai/configurations/${useCase}/response_format`);
+    }, [unauthenticatedApi]),
+
+    // AI Use Cases
+    getAIUseCases: useCallback(async () => {
+      return unauthenticatedApi.get('/ai/use-cases');
+    }, [unauthenticatedApi]),
+
+    // AI Files
+    getAIFiles: useCallback(async () => {
+      return api.get('/ai/files');
+    }, [api]),
+
+    uploadAIFile: useCallback(async (formData) => {
+      return api.post('/ai/files', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data'
+        }
+      });
+    }, [api]),
+
+    getAIFile: useCallback(async (fileId) => {
+      return api.get(`/ai/files/${fileId}`);
+    }, [api]),
+
+    interruptAIFile: useCallback(async (fileId) => {
+      return api.post(`/ai/files/${fileId}/interrupt`);
     }, [api])
   };
 };
