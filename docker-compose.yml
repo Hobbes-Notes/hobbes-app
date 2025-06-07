@@ -43,7 +43,6 @@ services:
       - AI_FILES_QUEUE_NAME=ai-files
     depends_on:
       - dynamodb-local
-      - localstack
 
   dynamodb-local:
     image: amazon/dynamodb-local:latest

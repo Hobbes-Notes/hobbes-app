@@ -15,6 +15,7 @@ class AIUseCase(str, Enum):
     """
     PROJECT_SUMMARY = "project_summary"
     RELEVANCE_EXTRACTION = "relevance_extraction"
+    ACTION_MANAGEMENT = "action_management"
     
     @property
     def expected_params(self) -> List[str]:
@@ -23,7 +24,8 @@ class AIUseCase(str, Enum):
         """
         params_map = {
             self.PROJECT_SUMMARY: ["project_name", "project_description", "current_summary", "note_content"],
-            self.RELEVANCE_EXTRACTION: ["project_name", "project_description", "note_content", "project_hierarchy"]
+            self.RELEVANCE_EXTRACTION: ["project_name", "project_description", "note_content", "project_hierarchy"],
+            self.ACTION_MANAGEMENT: ["note_content", "existing_action_items", "user_id"]
         }
         return params_map.get(self, [])
     
@@ -37,7 +39,9 @@ class AIUseCase(str, Enum):
             "project_description": "The description of the project",
             "current_summary": "The current summary of the project",
             "note_content": "The content of the note",
-            "project_hierarchy": "The hierarchical structure of the project with all child projects in nested JSON format"
+            "project_hierarchy": "The hierarchical structure of the project with all child projects in nested JSON format",
+            "existing_action_items": "JSON list of existing action items that the user currently has",
+            "user_id": "The ID of the user"
         }
         return {param: descriptions.get(param, "") for param in self.expected_params}
     
@@ -62,6 +66,30 @@ Return your response as a JSON object with the following structure:
     "is_relevant": true/false,
     "extracted_content": "The extracted content if relevant, empty string otherwise",
     "annotation": "Brief explanation of why the note is relevant or not relevant to this project"
+}
+
+Ensure your response is valid JSON and nothing else.
+""",
+            self.ACTION_MANAGEMENT: """
+Return your response as a JSON object with the following structure:
+{
+    "action_items": [
+        {
+            "action": "new|update|complete",
+            "id": "existing_action_item_id_if_updating_or_completing",
+            "task": "The action item task description",
+            "doer": "Who should do this (default to user if not specified)",
+            "deadline": "YYYY-MM-DD format if a deadline is mentioned, null otherwise",
+            "theme": "A thematic grouping for this action item",
+            "context": "Additional context that helps understand or complete the task",
+            "extracted_entities": {
+                "people": ["list of people mentioned"],
+                "places": ["list of places mentioned"],
+                "tools": ["list of tools/technologies mentioned"]
+            },
+            "type": "task|reminder|decision_point"
+        }
+    ]
 }
 
 Ensure your response is valid JSON and nothing else.

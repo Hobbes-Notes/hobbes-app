@@ -13,7 +13,7 @@ import sys
 from typing import Dict, Any, Optional
 import threading
 
-from infrastructure.sqs_client import get_sqs_client
+from ..infrastructure.sqs_client import get_sqs_client
 from api.services.ai_file_service import AIFileService
 from api.models.ai_file import AIFileState
 

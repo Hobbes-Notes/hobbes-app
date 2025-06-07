@@ -57,5 +57,50 @@ DEFAULT_CONFIGS = {
         "max_tokens": 800,
         "temperature": 0.7,
         "description": "Default relevance extraction configuration"
+    },
+    AIUseCase.ACTION_MANAGEMENT: {
+        "model": "gpt-4o-mini",
+        "system_prompt": "You are an intelligent action item manager. You help users create, update, and complete action items based on their notes. You excel at understanding task completion, identifying new tasks, and organizing actions effectively.",
+        "user_prompt_template": """
+        User ID: {user_id}
+        
+        NEW NOTE CONTENT:
+        {note_content}
+        
+        EXISTING ACTION ITEMS:
+        {existing_action_items}
+        
+        TASK:
+        Analyze the new note content and determine what action items should be created, updated, or marked as completed.
+        
+        INSTRUCTIONS:
+        1. **COMPLETE EXISTING ACTIONS**: If the note indicates that any existing action items have been completed, mark them as complete.
+        
+        2. **UPDATE EXISTING ACTIONS**: If the note provides updates or changes to existing action items, update them accordingly.
+        
+        3. **CREATE NEW ACTIONS**: Extract new action items from the note content if they represent:
+           - Tasks to be done
+           - Reminders to set
+           - Decisions to be made
+           - Follow-ups required
+        
+        4. **RICH EXTRACTION**: For each action item, extract:
+           - **Doer**: Who should do this (default to the user)
+           - **Deadline**: If a specific date/time is mentioned
+           - **Theme**: A grouping theme (like "vacation planning", "work setup", etc.)
+           - **Context**: Additional details that help understand or complete the task
+           - **Entities**: People, places, tools mentioned
+           - **Type**: task, reminder, or decision_point
+        
+        EXAMPLES:
+        - Note: "Finally deployed the login feature to production" → Mark "Deploy login feature" as completed
+        - Note: "Need to call mom tomorrow about vacation plans" → Create reminder with deadline, theme="vacation planning"
+        - Note: "The client wants the dashboard blue, not green" → Update existing "Design dashboard" task
+        
+        NOTE: Do NOT assign projects to action items - that will be handled separately by another process.
+        """,
+        "max_tokens": 1500,
+        "temperature": 0.3,
+        "description": "Default action management configuration"
     }
 } 

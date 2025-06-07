@@ -4,6 +4,7 @@ from .project import Project, ProjectCreate, ProjectUpdate, ProjectRef
 from .note import Note, NoteCreate, PaginatedNotes
 from .chat import ChatMessage
 from .ai import RelevanceExtraction
+from .action_item import ActionItem, ActionItemCreate, ActionItemUpdate
 
 __all__ = [
     'PaginatedResponse',
@@ -16,5 +17,8 @@ __all__ = [
     'NoteCreate',
     'PaginatedNotes',
     'ChatMessage',
-    'RelevanceExtraction'
+    'RelevanceExtraction',
+    'ActionItem',
+    'ActionItemCreate',
+    'ActionItemUpdate'
 ] 

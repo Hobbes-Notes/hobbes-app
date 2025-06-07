@@ -310,6 +310,124 @@ class AIService:
             logger.exception(f"Error extracting relevance: {str(e)}")
             raise
     
+    async def manage_action_items(self, params: Dict[str, Any], version: Optional[int] = None) -> List[Dict[str, Any]]:
+        """
+        CapA: Manage action items based on note content and existing action items.
+        
+        Args:
+            params: Dictionary containing:
+                - note_content: The content of the new note
+                - existing_action_items: JSON string of existing action items
+                - user_id: The user ID
+            version: Optional specific version to use. If not provided, the active configuration will be used.
+                
+        Returns:
+            List of action item operations (new, update, complete)
+        """
+        logger.info("Starting action item management process")
+        
+        if not self._client:
+            logger.error("OpenAI client not initialized. Cannot manage action items.")
+            return []
+        
+        try:
+            # Extract parameters
+            note_content = params.get("note_content", "")
+            existing_action_items = params.get("existing_action_items", "[]")
+            user_id = params.get("user_id", "")
+            
+            # Log input parameters
+            logger.info(f"Managing action items for user: {user_id}")
+            logger.debug(f"Note content length: {len(note_content)} chars")
+            logger.debug(f"Note content preview: '{note_content[:100]}...'")
+            logger.debug(f"Existing action items: {existing_action_items[:500]}...")
+            
+            # Get the configuration for action management
+            logger.debug(f"Fetching AI configuration for ACTION_MANAGEMENT use case" + (f" version {version}" if version else " (active version)"))
+            
+            if version is not None:
+                config = await self.get_configuration(AIUseCase.ACTION_MANAGEMENT, version)
+                if not config:
+                    logger.error(f"Configuration for ACTION_MANAGEMENT version {version} not found, falling back to active configuration")
+                    config = await self._get_configuration(AIUseCase.ACTION_MANAGEMENT)
+            else:
+                config = await self._get_configuration(AIUseCase.ACTION_MANAGEMENT)
+                
+            logger.debug(f"Using model: {config.model}, max_tokens: {config.max_tokens}, temperature: {config.temperature}")
+            
+            # Log the template before replacement
+            logger.debug(f"Prompt template before replacement:\n{config.user_prompt_template}")
+            
+            # Safely format the template
+            try:
+                user_prompt = config.user_prompt_template.format(
+                    note_content=note_content,
+                    existing_action_items=existing_action_items,
+                    user_id=user_id
+                )
+                logger.debug(f"Prompt after replacement (first 500 chars):\n{user_prompt[:500]}...")
+                logger.debug(f"Prepared user prompt with length: {len(user_prompt)}")
+            except KeyError as e:
+                logger.error(f"Error formatting prompt template: {str(e)}")
+                logger.error(f"Template: {config.user_prompt_template}")
+                logger.error(f"Available variables: note_content, existing_action_items, user_id")
+                raise ValueError(f"Error formatting prompt template: {str(e)}")
+            
+            # Append the response format
+            user_prompt += AIUseCase.ACTION_MANAGEMENT.response_format
+            
+            # Call OpenAI API
+            logger.info(f"Calling OpenAI API for action item management")
+            start_time = time.time()
+            response = self._client.chat.completions.create(
+                model=config.model,
+                messages=[
+                    {"role": "system", "content": config.system_prompt},
+                    {"role": "user", "content": user_prompt}
+                ],
+                max_tokens=config.max_tokens,
+                temperature=config.temperature,
+                response_format={
+                    "type": "json_object",
+                    "strict": True
+                }
+            )
+            end_time = time.time()
+            
+            # Parse the response
+            response_content = response.choices[0].message.content
+            logger.debug(f"Raw API response: {response_content}")
+            logger.info(f"API call completed in {end_time - start_time:.2f} seconds")
+            
+            try:
+                # Parse the JSON response
+                logger.debug("Attempting to parse JSON response")
+                response_json = json.loads(response_content)
+                
+                # Extract the action items
+                if "action_items" not in response_json:
+                    logger.error(f"Response JSON missing required 'action_items' key. Keys found: {list(response_json.keys())}")
+                    raise ValueError(f"Invalid response format: missing 'action_items' key. Keys found: {list(response_json.keys())}")
+                
+                action_items = response_json["action_items"]
+                
+                logger.info(f"AI suggested {len(action_items)} action item operations")
+                for i, item in enumerate(action_items):
+                    action_type = item.get("action", "unknown")
+                    task = item.get("task", "")[:50]
+                    logger.debug(f"Action {i+1}: {action_type} - {task}...")
+                
+                return action_items
+                
+            except json.JSONDecodeError as e:
+                logger.error(f"Failed to parse JSON response: {e}")
+                logger.error(f"Response content: {response_content}")
+                raise ValueError(f"Failed to parse JSON response: {e}")
+        
+        except Exception as e:
+            logger.exception(f"Error managing action items: {str(e)}")
+            raise
+    
     async def get_configuration(self, use_case: AIUseCase, version: int) -> Optional[AIConfiguration]:
         """
         Get a specific configuration.
