@@ -101,8 +101,10 @@ export const useApiService = () => {
       return api.get(`/notes?${params.toString()}`);
     }, [api]),
 
-    getAllNotes: useCallback(async () => {
-      return api.get('/notes');
+    getAllNotes: useCallback(async (userId) => {
+      const params = new URLSearchParams();
+      if (userId) params.append('user_id', userId);
+      return api.get(`/notes?${params.toString()}`);
     }, [api]),
 
     getNote: useCallback(async (id) => {
@@ -115,6 +117,30 @@ export const useApiService = () => {
         noteData.project_id = project_id;
       }
       return api.post('/notes', noteData);
+    }, [api]),
+
+    // Action Items
+    getActionItems: useCallback(async () => {
+      return api.get('/action-items');
+    }, [api]),
+
+    getActionItemsByProject: useCallback(async (projectId) => {
+      if (!projectId) {
+        throw new Error('Project ID is required');
+      }
+      return api.get(`/action-items/project/${projectId}`);
+    }, [api]),
+
+    createActionItem: useCallback(async (actionItemData) => {
+      return api.post('/action-items', actionItemData);
+    }, [api]),
+
+    updateActionItem: useCallback(async (id, updateData) => {
+      return api.put(`/action-items/${id}`, updateData);
+    }, [api]),
+
+    deleteActionItem: useCallback(async (id) => {
+      return api.delete(`/action-items/${id}`);
     }, [api]),
 
     // AI Configurations (using unauthenticated API)

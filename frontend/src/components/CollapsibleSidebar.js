@@ -13,9 +13,8 @@ import {
 import ProjectFormModal from './ProjectFormModal';
 import ProjectTreeItem from './ProjectTreeItem';
 
-const Sidebar = ({ 
+const CollapsibleSidebar = ({ 
   projects = [], 
-  actionItems = [],
   onProjectCreated, 
   onProjectDeleted 
 }) => {
@@ -27,20 +26,23 @@ const Sidebar = ({
     createProject, 
     updateProject, 
     deleteProject,
-    getAllNotes
+    getAllNotes,
+    getActionItems
   } = useApiService();
 
-    // State for collapsible sections
+  // State for collapsible sections
   const [sectionsExpanded, setSectionsExpanded] = useState({
     projects: true,
-    notes: false
-    // actionItems always visible, no collapse needed
+    notes: false,
+    actionItems: true // Default selected section
   });
 
   // State for data
   const [notes, setNotes] = useState([]);
+  const [actionItems, setActionItems] = useState([]);
   const [loading, setLoading] = useState({
-    notes: false
+    notes: false,
+    actionItems: false
   });
 
   // State for project form
@@ -56,7 +58,7 @@ const Sidebar = ({
 
     try {
       setLoading(prev => ({ ...prev, notes: true }));
-      const response = await getAllNotes(user.id);
+      const response = await getAllNotes();
       if (response.data && response.data.items) {
         setNotes(response.data.items);
       }
@@ -67,7 +69,24 @@ const Sidebar = ({
     }
   }, [getAllNotes, user, loading.notes]);
 
-  // Toggle section expansion (only for notes and projects)
+  // Fetch action items when action items section is expanded
+  const fetchActionItems = useCallback(async () => {
+    if (!user || loading.actionItems) return;
+
+    try {
+      setLoading(prev => ({ ...prev, actionItems: true }));
+      const response = await getActionItems();
+      if (response.data && response.data.success) {
+        setActionItems(response.data.data || []);
+      }
+    } catch (error) {
+      console.error('Error fetching action items:', error);
+    } finally {
+      setLoading(prev => ({ ...prev, actionItems: false }));
+    }
+  }, [getActionItems, user, loading.actionItems]);
+
+  // Toggle section expansion
   const toggleSection = (section) => {
     setSectionsExpanded(prev => {
       const newState = { ...prev, [section]: !prev[section] };
@@ -77,34 +96,36 @@ const Sidebar = ({
         if (section === 'notes' && notes.length === 0) {
           fetchNotes();
         }
+        if (section === 'actionItems' && actionItems.length === 0) {
+          fetchActionItems();
+        }
       }
       
       return newState;
     });
   };
 
-  // Load notes on component mount to show count in sidebar
+  // Load action items on component mount since it's default expanded
   useEffect(() => {
-    if (notes.length === 0) {
-      fetchNotes();
+    if (sectionsExpanded.actionItems && actionItems.length === 0) {
+      fetchActionItems();
     }
-  }, [notes.length, fetchNotes]);
+  }, [sectionsExpanded.actionItems, actionItems.length, fetchActionItems]);
 
   const handleLogout = async () => {
     await logout();
     navigate('/login');
   };
 
+  // Project form handlers (from original Sidebar)
   const handleCreateProject = async (projectData) => {
     try {
       setIsSubmitting(true);
       setError(null);
       
-      // Find parent project if we have a parent_id
       const parentProject = selectedParentId ? 
         projects.find(p => p.id === selectedParentId) : null;
       
-      // Check nesting level before making the API call
       if (parentProject) {
         const parentLevel = parentProject.level || 1;
         if (parentLevel >= 3) {
@@ -186,7 +207,7 @@ const Sidebar = ({
     setShowProjectForm(true);
   };
 
-  // Helper function to render section header with collapse toggle (for Projects and Notes only)
+  // Helper function to render section header with collapse toggle
   const renderSectionHeader = (section, title, icon, count = null) => (
     <button
       onClick={() => toggleSection(section)}
@@ -207,7 +228,7 @@ const Sidebar = ({
     </button>
   );
 
-  // Filter root projects (those without a parent)
+  // Filter root projects
   const rootProjects = projects.filter(p => !p.parent_id);
 
   return (
@@ -228,26 +249,6 @@ const Sidebar = ({
 
       {/* Collapsible Sections */}
       <div className="flex-1 overflow-y-auto">
-        {/* Action Items Section - Click to view all in right panel */}
-        <div className="border-b border-gray-200">
-          <button
-            onClick={() => navigate('/action-items')}
-            className={`w-full flex items-center justify-between px-3 py-2 text-sm font-semibold hover:bg-gray-50 rounded ${
-              location.pathname.startsWith('/action-items') 
-                ? 'bg-blue-50 text-blue-700' 
-                : 'text-gray-700'
-            }`}
-          >
-            <div className="flex items-center space-x-2">
-              <CheckSquareIcon className="w-4 h-4" />
-              <span className="uppercase tracking-wider">Action Items</span>
-              {actionItems.length > 0 && (
-                <span className="text-xs text-gray-500">({actionItems.length})</span>
-              )}
-            </div>
-          </button>
-        </div>
-
         {/* Projects Section */}
         <div className="border-b border-gray-200">
           {renderSectionHeader(
@@ -339,6 +340,59 @@ const Sidebar = ({
             </div>
           )}
         </div>
+
+        {/* Action Items Section */}
+        <div>
+          {renderSectionHeader(
+            'actionItems', 
+            'Action Items', 
+            <CheckSquareIcon className="w-4 h-4" />, 
+            actionItems.length
+          )}
+          
+          {sectionsExpanded.actionItems && (
+            <div className="px-3 pb-3">
+              {loading.actionItems ? (
+                <div className="flex justify-center py-4">
+                  <div className="animate-spin rounded-full h-6 w-6 border-t-2 border-b-2 border-blue-500"></div>
+                </div>
+              ) : (
+                <div className="space-y-1">
+                  {actionItems.map((item) => (
+                    <button
+                      key={item.id}
+                      onClick={() => navigate(`/action-items/${item.id}`)}
+                      className="w-full text-left px-2 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded"
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="truncate flex-1">
+                          {item.task}
+                        </div>
+                        <span className={`ml-2 px-2 py-0.5 text-xs font-medium rounded ${
+                          item.status === 'completed' 
+                            ? 'bg-green-100 text-green-800' 
+                            : 'bg-yellow-100 text-yellow-800'
+                        }`}>
+                          {item.status}
+                        </span>
+                      </div>
+                      {item.doer && (
+                        <div className="text-xs text-gray-500 mt-1">
+                          {item.doer}
+                        </div>
+                      )}
+                    </button>
+                  ))}
+                  {actionItems.length === 0 && (
+                    <p className="text-sm text-gray-500 py-4 text-center">
+                      No action items yet
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* User Controls Section */}
@@ -393,4 +447,4 @@ const Sidebar = ({
   );
 };
 
-export default Sidebar; 
+export default CollapsibleSidebar; 

@@ -7,9 +7,12 @@ import LoginPage from './components/LoginPage';
 import ProfilePage from './components/ProfilePage';
 import ProjectsPage from './components/ProjectsPage';
 import NotesPage from './components/NotesPage';
+import NotesView from './components/NotesView';
 import ProjectView from './components/ProjectView';
+import ActionItemsPage from './components/ActionItemsPage';
 import AIConfigPage from './components/AIConfigPage';
 import AIFilesPage from './components/AIFilesPage';
+
 
 function App() {
   const clientId = process.env.REACT_APP_GOOGLE_CLIENT_ID;
@@ -43,6 +46,27 @@ function App() {
                 }
               >
                 <Route path=":projectId" element={<ProjectView />} />
+              </Route>
+              <Route
+                path="/notes"
+                element={
+                  <ProtectedRoute>
+                    <ProjectsPage />
+                  </ProtectedRoute>
+                }
+              >
+                <Route path=":noteId" element={<NotesView />} />
+              </Route>
+              <Route
+                path="/action-items"
+                element={
+                  <ProtectedRoute>
+                    <ProjectsPage />
+                  </ProtectedRoute>
+                }
+              >
+                <Route index element={<ActionItemsPage />} />
+                <Route path=":actionItemId" element={<ActionItemsPage />} />
               </Route>
               <Route
                 path="/projects/:projectId/notes"

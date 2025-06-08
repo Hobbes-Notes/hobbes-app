@@ -1,0 +1,184 @@
+import React, { useState } from 'react';
+import { useParams, useOutletContext } from 'react-router-dom';
+
+const ActionItemsPage = () => {
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const { actionItemId } = useParams();
+  const { actionItems = [] } = useOutletContext();
+
+  // No need to fetch action items - they come from parent component
+
+  // If specific action item is selected, show only that one
+  const selectedActionItem = actionItemId ? 
+    actionItems.find(item => item.id === actionItemId) : null;
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-full">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="p-6">
+        <div className="p-4 text-red-600 bg-red-100 rounded-lg">
+          {error}
+        </div>
+      </div>
+    );
+  }
+
+  // Show individual action item details
+  if (selectedActionItem) {
+    return (
+      <div className="p-6 max-w-4xl mx-auto">
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+          <div className="flex items-center justify-between mb-4">
+            <h1 className="text-2xl font-bold text-gray-900">
+              {selectedActionItem.task}
+            </h1>
+            <span className={`px-3 py-1 text-sm font-medium rounded-full ${
+              selectedActionItem.status === 'completed' 
+                ? 'bg-green-100 text-green-800' 
+                : 'bg-yellow-100 text-yellow-800'
+            }`}>
+              {selectedActionItem.status}
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+            {selectedActionItem.doer && (
+              <div>
+                <h3 className="text-sm font-medium text-gray-500">Assigned to</h3>
+                <p className="mt-1 text-gray-900">{selectedActionItem.doer}</p>
+              </div>
+            )}
+            
+            {selectedActionItem.deadline && (
+              <div>
+                <h3 className="text-sm font-medium text-gray-500">Deadline</h3>
+                <p className="mt-1 text-gray-900">
+                  {new Date(selectedActionItem.deadline).toLocaleDateString()}
+                </p>
+              </div>
+            )}
+
+            {selectedActionItem.theme && (
+              <div>
+                <h3 className="text-sm font-medium text-gray-500">Theme</h3>
+                <p className="mt-1 text-gray-900">{selectedActionItem.theme}</p>
+              </div>
+            )}
+
+            <div>
+              <h3 className="text-sm font-medium text-gray-500">Type</h3>
+              <p className="mt-1 text-gray-900 capitalize">{selectedActionItem.type}</p>
+            </div>
+          </div>
+
+          {selectedActionItem.context && (
+            <div className="mb-6">
+              <h3 className="text-sm font-medium text-gray-500 mb-2">Context</h3>
+              <p className="text-gray-900 whitespace-pre-wrap">{selectedActionItem.context}</p>
+            </div>
+          )}
+
+          {selectedActionItem.projects && selectedActionItem.projects.length > 0 && (
+            <div className="mb-6">
+              <h3 className="text-sm font-medium text-gray-500 mb-2">Related Projects</h3>
+              <div className="flex flex-wrap gap-2">
+                {selectedActionItem.projects.map((projectId, index) => (
+                  <span
+                    key={index}
+                    className="px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded"
+                  >
+                    {projectId}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div className="text-sm text-gray-500 border-t border-gray-200 pt-4">
+            <p>Created: {new Date(selectedActionItem.created_at).toLocaleString()}</p>
+            <p>Updated: {new Date(selectedActionItem.updated_at).toLocaleString()}</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Show all action items
+  return (
+    <div className="p-6 max-w-4xl mx-auto">
+      <h1 className="text-2xl font-bold mb-6">Action Items</h1>
+      
+      <div className="space-y-4">
+        {actionItems.map((item) => (
+          <div
+            key={item.id}
+            className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 hover:shadow-md transition-shadow"
+          >
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="text-lg font-medium text-gray-900">
+                {item.task}
+              </h3>
+              <span className={`px-2 py-1 text-xs font-medium rounded ${
+                item.status === 'completed' 
+                  ? 'bg-green-100 text-green-800' 
+                  : 'bg-yellow-100 text-yellow-800'
+              }`}>
+                {item.status}
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm text-gray-600 mb-3">
+              {item.doer && (
+                <div>
+                  <span className="font-medium">Doer:</span> {item.doer}
+                </div>
+              )}
+              {item.deadline && (
+                <div>
+                  <span className="font-medium">Deadline:</span> {new Date(item.deadline).toLocaleDateString()}
+                </div>
+              )}
+              {item.theme && (
+                <div>
+                  <span className="font-medium">Theme:</span> {item.theme}
+                </div>
+              )}
+            </div>
+
+            {item.context && (
+              <p className="text-gray-700 mb-3 line-clamp-2">
+                {item.context}
+              </p>
+            )}
+
+            <div className="text-xs text-gray-500">
+              Created: {new Date(item.created_at).toLocaleDateString()}
+            </div>
+          </div>
+        ))}
+
+        {actionItems.length === 0 && (
+          <div className="text-center py-12">
+            <div className="text-gray-500">
+              <svg className="mx-auto h-12 w-12 text-gray-400" stroke="currentColor" fill="none" viewBox="0 0 48 48">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <h3 className="mt-2 text-sm font-medium text-gray-900">No action items</h3>
+              <p className="mt-1 text-sm text-gray-500">Get started by creating your first action item.</p>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+export default ActionItemsPage; 

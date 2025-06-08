@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Outlet, useParams } from 'react-router-dom';
+import { Outlet, useParams, useLocation } from 'react-router-dom';
 import { useApiService } from '../services/api';
 import Sidebar from './Sidebar';
 import GlobalNoteInput from './GlobalNoteInput';
@@ -11,6 +11,7 @@ const DEFAULT_SIDEBAR_WIDTH = 256;
 
 const ProjectsPage = () => {
   const [projects, setProjects] = useState([]);
+  const [actionItems, setActionItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [sidebarWidth, setSidebarWidth] = useState(() => {
@@ -21,7 +22,13 @@ const ProjectsPage = () => {
   const sidebarRef = useRef(null);
   const { user } = useAuth();
   const { projectId } = useParams();
-  const { getProjects } = useApiService();
+  const location = useLocation();
+  const { getProjects, getActionItems } = useApiService();
+  
+  // Check if we're on a route that should show content in the right panel
+  const hasContent = projectId || 
+    location.pathname.startsWith('/action-items') || 
+    location.pathname.startsWith('/notes/');
 
   // Handle mouse move during resize
   const handleMouseMove = useCallback((e) => {
@@ -75,9 +82,24 @@ const ProjectsPage = () => {
     }
   }, [getProjects, user]);
 
+  const fetchActionItems = useCallback(async () => {
+    if (!user) return;
+
+    try {
+      const response = await getActionItems();
+      if (response.data && response.data.success) {
+        setActionItems(response.data.data || []);
+      }
+    } catch (error) {
+      console.error('Error fetching action items in ProjectsPage:', error);
+      // Don't set error state for action items, just log it
+    }
+  }, [getActionItems, user]);
+
   useEffect(() => {
     fetchProjects();
-  }, [fetchProjects]);
+    fetchActionItems();
+  }, [fetchProjects, fetchActionItems]);
 
   const handleProjectUpdated = useCallback(async () => {
     await fetchProjects();
@@ -114,6 +136,7 @@ const ProjectsPage = () => {
       >
         <Sidebar 
           projects={projects} 
+          actionItems={actionItems}
           onProjectCreated={handleProjectUpdated}
           onProjectDeleted={handleProjectUpdated}
         />
@@ -124,12 +147,32 @@ const ProjectsPage = () => {
         />
       </div>
       <main className="flex-1 overflow-y-auto pb-32">
-        {!projectId && (
-          <div className="flex items-center justify-center h-full text-gray-500">
-            Select a project or create a new one
+        {!hasContent && (
+          <div className="flex items-center justify-center h-full">
+            <div className="text-center">
+              <h1 className="text-4xl font-bold text-gray-900 mb-4">Welcome to Hobbes</h1>
+              <p className="text-lg text-gray-600 mb-8">Your personal knowledge management system</p>
+              <div className="space-y-4 text-gray-500">
+                <p>👈 Use the sidebar to navigate between:</p>
+                <div className="space-y-2 text-left max-w-md mx-auto">
+                  <div className="flex items-center space-x-2">
+                    <span className="w-4 h-4">✅</span>
+                    <span><strong>Action Items</strong> - Track your tasks and todos</span>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <span className="w-4 h-4">📁</span>
+                    <span><strong>Projects</strong> - Organize your work</span>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <span className="w-4 h-4">📝</span>
+                    <span><strong>Notes</strong> - Capture your thoughts</span>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         )}
-        <Outlet context={{ onNoteCreated: handleNoteCreated }} />
+        <Outlet context={{ onNoteCreated: handleNoteCreated, actionItems }} />
       </main>
       <div 
         className="fixed bottom-0 right-0 bg-white border-t border-gray-200 shadow-lg"
