@@ -4,8 +4,8 @@ from datetime import datetime
 from typing import Dict, List, Optional
 from fastapi import HTTPException
 
-from ...repositories.note_repository import NoteRepository
-from ...models.note import Note, NoteCreate, NoteUpdate
+from api.repositories.note_repository import NoteRepository
+from api.models.note import Note, NoteCreate, NoteUpdate
 from ...models.pagination import PaginatedResponse, PaginationParams
 from ...models.project import ProjectRef
 from infrastructure.dynamodb_client import get_dynamodb_client

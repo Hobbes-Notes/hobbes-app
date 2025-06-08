@@ -7,8 +7,8 @@ This module provides service-level functionality for action item operations.
 import logging
 from typing import List, Optional
 
-from ..models.action_item import ActionItem, ActionItemCreate, ActionItemUpdate
-from ..repositories.action_item_repository import ActionItemRepository
+from api.models.action_item import ActionItem, ActionItemCreate, ActionItemUpdate
+from api.repositories.action_item_repository import ActionItemRepository
 
 logger = logging.getLogger(__name__)
 

@@ -11,7 +11,7 @@ import requests as http_requests
 from fastapi import HTTPException, status
 from datetime import datetime
 
-from ..models.user import User, UserCreate
+from api.models.user import User, UserCreate
 from .jwt_service import verify_token
 from .user_service import UserService
 

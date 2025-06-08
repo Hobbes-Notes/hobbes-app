@@ -15,8 +15,8 @@ from typing import Dict, List, Optional, Any
 import os
 from decimal import Decimal
 
-from ...repositories.ai_repository import AIRepository
-from ...models.ai import AIConfiguration, AIUseCase
+from api.repositories.ai_repository import AIRepository
+from api.models.ai import AIConfiguration, AIUseCase
 from ...config.default_ai_configs import DEFAULT_CONFIGS
 
 # Set up logging

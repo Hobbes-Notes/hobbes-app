@@ -2,9 +2,9 @@ from fastapi import APIRouter, Depends, HTTPException, status, Body, Response, R
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from typing import Dict, Optional
 
-from ..models.user import User
-from ..services.auth_service import AuthService
-from ..services.jwt_service import create_tokens, verify_token
+from api.models.user import User
+from api.services.auth_service import AuthService
+from api.services.jwt_service import create_tokens, verify_token
 
 security = HTTPBearer()
 router = APIRouter()

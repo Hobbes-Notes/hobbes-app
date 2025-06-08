@@ -9,9 +9,9 @@ import logging
 from datetime import datetime
 from typing import Optional
 
-from ..models.user import User, UserCreate, UserUpdate
-from ..repositories.user_repository import UserRepository
-from ..repositories.impl.user_repository_impl import UserRepositoryImpl
+from api.models.user import User, UserCreate, UserUpdate
+from api.repositories.user_repository import UserRepository
+from api.repositories.impl.user_repository_impl import UserRepositoryImpl
 
 logger = logging.getLogger(__name__)
 

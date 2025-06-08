@@ -4,8 +4,8 @@ from datetime import datetime
 from typing import Dict, List, Optional
 from fastapi import HTTPException
 
-from ...repositories.project_repository import ProjectRepository
-from ...models.project import Project, ProjectCreate
+from api.repositories.project_repository import ProjectRepository
+from api.models.project import Project, ProjectCreate
 from ...models.pagination import PaginatedResponse, PaginationParams
 from infrastructure.dynamodb_client import get_dynamodb_client
 

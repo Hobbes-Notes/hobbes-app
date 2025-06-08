@@ -14,8 +14,8 @@ RUN apt-get update && \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Set PYTHONPATH to ensure imports work - simpler approach for Docker
-ENV PYTHONPATH=/code/src
+# Set PYTHONPATH to ensure imports work - matches volume mount at /code
+ENV PYTHONPATH=/code
 
 # Source code will be mounted via volume
 # No COPY needed - docker-compose handles this

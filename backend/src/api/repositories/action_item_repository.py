@@ -9,8 +9,8 @@ import uuid
 from typing import List, Optional, Dict, Any
 from datetime import datetime
 
-from ..models.action_item import ActionItem, ActionItemCreate, ActionItemUpdate
-from ...infrastructure.dynamodb_client import DynamoDBClient
+from api.models.action_item import ActionItem, ActionItemCreate, ActionItemUpdate
+from infrastructure.dynamodb_client import DynamoDBClient
 
 logger = logging.getLogger(__name__)
 
@@ -193,9 +193,9 @@ class ActionItemRepository:
         """
         try:
             # Query by user_id (assuming we have a GSI on user_id)
-            result = await self.dynamodb_client.query(
+            result = self.dynamodb_client.query(
                 self.table_name,
-                index_name="user-id-index",
+                index_name="user_id-index",
                 key_condition_expression="user_id = :user_id",
                 expression_attribute_values={":user_id": user_id}
             )
@@ -270,49 +270,64 @@ class ActionItemRepository:
         Create the action items table if it doesn't exist.
         """
         try:
-            # Define table schema
-            table_schema = {
-                "TableName": self.table_name,
-                "KeySchema": [
-                    {
-                        "AttributeName": "id",
-                        "KeyType": "HASH"
-                    }
-                ],
-                "AttributeDefinitions": [
-                    {
-                        "AttributeName": "id",
-                        "AttributeType": "S"
-                    },
-                    {
-                        "AttributeName": "user_id",
-                        "AttributeType": "S"
-                    }
-                ],
-                "GlobalSecondaryIndexes": [
-                    {
-                        "IndexName": "user-id-index",
-                        "KeySchema": [
-                            {
-                                "AttributeName": "user_id",
-                                "KeyType": "HASH"
-                            }
-                        ],
-                        "Projection": {
-                            "ProjectionType": "ALL"
-                        },
-                        "BillingMode": "PAY_PER_REQUEST"
-                    }
-                ],
-                "BillingMode": "PAY_PER_REQUEST"
-            }
+            # Check if table already exists
+            if self.dynamodb_client.table_exists(self.table_name):
+                logger.info(f"Action items table '{self.table_name}' already exists")
+                return
             
-            await self.dynamodb_client.create_table_if_not_exists(
-                self.table_name,
-                table_schema
+            # Define table schema parameters
+            key_schema = [
+                {
+                    'AttributeName': 'id',
+                    'KeyType': 'HASH'
+                }
+            ]
+            
+            attribute_definitions = [
+                {
+                    'AttributeName': 'id',
+                    'AttributeType': 'S'
+                },
+                {
+                    'AttributeName': 'user_id',
+                    'AttributeType': 'S'
+                }
+            ]
+            
+            global_secondary_indexes = [
+                {
+                    'IndexName': 'user_id-index',
+                    'KeySchema': [
+                        {
+                            'AttributeName': 'user_id',
+                            'KeyType': 'HASH'
+                        }
+                    ],
+                    'Projection': {
+                        'ProjectionType': 'ALL'
+                    },
+                    'ProvisionedThroughput': {
+                        'ReadCapacityUnits': 5,
+                        'WriteCapacityUnits': 5
+                    }
+                }
+            ]
+            
+            # Create table using existing client method
+            self.dynamodb_client.create_table(
+                table_name=self.table_name,
+                key_schema=key_schema,
+                attribute_definitions=attribute_definitions,
+                global_secondary_indexes=global_secondary_indexes,
+                provisioned_throughput={
+                    'ReadCapacityUnits': 5,
+                    'WriteCapacityUnits': 5
+                }
             )
             
-            logger.info(f"Action items table '{self.table_name}' is ready")
+            # Wait for table to be active
+            self.dynamodb_client.get_client().get_waiter('table_exists').wait(TableName=self.table_name)
+            logger.info(f"Action items table '{self.table_name}' created successfully")
             
         except Exception as e:
             logger.error(f"Error creating action items table: {str(e)}")

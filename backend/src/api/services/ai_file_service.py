@@ -16,9 +16,9 @@ from typing import Dict, List, Optional, Any, BinaryIO, Union
 from ..models.ai_file import AIFile, AIFileRecord, AIFileState, AIFileInput, AIFileOutput
 from ..repositories.ai_file_repository import AIFileRepository
 from ..repositories.s3_repository import S3Repository
-from ..services.ai_service import AIService
-from ..models.ai import AIUseCase, AIConfiguration
-from ...infrastructure.sqs_client import get_sqs_client
+from api.services.ai_service import AIService
+from api.models.ai import AIUseCase, AIConfiguration
+from infrastructure.sqs_client import get_sqs_client
 
 # Set up logging
 logger = logging.getLogger(__name__)

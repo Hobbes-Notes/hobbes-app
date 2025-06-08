@@ -7,8 +7,8 @@ This module provides a DynamoDB implementation of the user repository interface.
 import logging
 from typing import Optional, Dict
 
-from ..user_repository import UserRepository
-from ...models.user import User, UserCreate, UserUpdate
+from api.repositories.user_repository import UserRepository
+from api.models.user import User, UserCreate, UserUpdate
 from infrastructure.dynamodb_client import get_dynamodb_client
 
 logger = logging.getLogger(__name__)
