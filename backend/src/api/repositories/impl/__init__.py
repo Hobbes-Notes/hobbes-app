@@ -7,10 +7,10 @@ This module provides factory functions for repository implementations.
 import os
 from typing import Optional
 
-from ...repositories.project_repository import ProjectRepository
-from ...repositories.note_repository import NoteRepository
-from ...repositories.ai_repository import AIRepository
-# from ...repositories.action_item_repository import ActionItemRepository
+from api.repositories.project_repository import ProjectRepository
+from api.repositories.note_repository import NoteRepository
+from api.repositories.ai_repository import AIRepository
+from api.repositories.action_item_repository import ActionItemRepository
 
 # Removed auto-imports - use lazy loading instead:
 # from .project_repository_impl import DynamoDBProjectRepository
@@ -19,11 +19,11 @@ from ...repositories.ai_repository import AIRepository
 # from .user_repository_impl import UserRepositoryImpl
 
 # from .action_item_repository_impl import DynamoDBActionItemRepository
-from ...services.ai_service import AIService
-# from ...services.action_item_service import ActionItemService
-from ..ai_file_repository import AIFileRepository
+from api.services.ai_service import AIService
+from api.services.action_item_service import ActionItemService
+from api.repositories.ai_file_repository import AIFileRepository
 # from .ai_file_repository_impl import AIFileRepositoryImpl
-from ..s3_repository import S3Repository
+from api.repositories.s3_repository import S3Repository
 # from .s3_repository_impl import S3RepositoryImpl
 
 # Singleton instances
@@ -33,7 +33,7 @@ _user_repository = None
 _action_item_repository = None
 _ai_repository_instance: Optional[AIRepository] = None
 _ai_service_instance: Optional[AIService] = None
-# _action_item_service_instance: Optional[ActionItemService] = None
+_action_item_service_instance: Optional[ActionItemService] = None
 _ai_file_repository_instance: Optional[AIFileRepository] = None
 _ai_file_s3_repository_instance: Optional[S3Repository] = None
 
@@ -76,17 +76,18 @@ def get_user_repository():
         _user_repository = UserRepositoryImpl()
     return _user_repository
 
-# def get_action_item_repository() -> ActionItemRepository:
-#     """
-#     Get the action item repository implementation.
-#     
-#     Returns:
-#         The action item repository implementation.
-#     """
-#     global _action_item_repository
-#     if _action_item_repository is None:
-#         _action_item_repository = DynamoDBActionItemRepository()
-#     return _action_item_repository
+def get_action_item_repository() -> ActionItemRepository:
+    """
+    Get the action item repository implementation.
+    
+    Returns:
+        The action item repository implementation.
+    """
+    global _action_item_repository
+    if _action_item_repository is None:
+        from .action_item_repository_impl import DynamoDBActionItemRepository
+        _action_item_repository = DynamoDBActionItemRepository()
+    return _action_item_repository
 
 def get_ai_repository() -> AIRepository:
     """
@@ -117,19 +118,19 @@ def get_ai_service() -> AIService:
         
     return _ai_service_instance
 
-# def get_action_item_service() -> ActionItemService:
-#     """
-#     Get the action item service instance.
-#     
-#     Returns:
-#         ActionItemService instance
-#     """
-#     global _action_item_service_instance
-#     
-#     if _action_item_service_instance is None:
-#         _action_item_service_instance = ActionItemService(get_action_item_repository())
-#         
-#     return _action_item_service_instance
+def get_action_item_service() -> ActionItemService:
+    """
+    Get the action item service instance.
+    
+    Returns:
+        ActionItemService instance
+    """
+    global _action_item_service_instance
+    
+    if _action_item_service_instance is None:
+        _action_item_service_instance = ActionItemService(get_action_item_repository())
+        
+    return _action_item_service_instance
 
 # def get_ai_file_repository() -> AIFileRepository:
 #     """

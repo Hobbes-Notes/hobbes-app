@@ -7,12 +7,12 @@ from ..models.note import Note, NoteCreate, PaginatedNotes
 from ..services.note_service import NoteService
 from ..services.project_service import ProjectService
 from ..services.ai_service import AIService
-# from ..services.action_item_service import ActionItemService
+from ..services.action_item_service import ActionItemService
 from ..repositories.impl import (
     get_note_repository, 
     get_project_repository, 
     get_ai_service, 
-    # get_action_item_service
+    get_action_item_service
 )
 
 logger = logging.getLogger(__name__)
@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 ai_service = get_ai_service()
-# action_item_service = get_action_item_service()
+action_item_service = get_action_item_service()
 project_service = ProjectService(ai_service=ai_service)
 note_repository = get_note_repository()
 project_repository = get_project_repository()
@@ -29,7 +29,7 @@ note_service = NoteService(
     project_repository=project_repository,
     project_service=project_service,
     ai_service=ai_service,
-    # action_item_service=action_item_service
+    action_item_service=action_item_service
 )
 
 def get_note_service() -> NoteService:

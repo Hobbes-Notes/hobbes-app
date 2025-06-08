@@ -388,8 +388,7 @@ class AIService:
                 max_tokens=config.max_tokens,
                 temperature=config.temperature,
                 response_format={
-                    "type": "json_object",
-                    "strict": True
+                    "type": "json_object"
                 }
             )
             end_time = time.time()

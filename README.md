@@ -71,12 +71,23 @@ PROJECT SETUP
 DAILY USAGE
 -----------
 **🚀 Self-Healing Development (Recommended)**
-- Dev start: `make dev-start` (validates environment, auto-fixes issues)
+- Full stack: `make dev-start` (starts frontend + backend + db)
+- Backend only: `make dev-start-backend` (for pure API work)
 - Cursor setup: `make dev-setup` (for local Python development)
 - Reset everything: `make dev-reset` (nuclear option when things break)
 
+**🎨 Frontend Development**
+- Frontend only: `make frontend-start` (React development focus)
+- Frontend logs: `make frontend-logs` (debug React issues)
+- Frontend shell: `make frontend-shell` (access container)
+- Rebuild frontend: `make frontend-rebuild` (after package changes)
+- Install deps: `make frontend-install` (add new packages)
+- Clean install: `make frontend-clean-install` (fix corrupted deps)
+- Run tests: `make frontend-test` (React test suite)
+- Production build: `make frontend-build` (test build process)
+
 **🔧 Standard Commands**
-- Start: `make start`
+- Start all: `make start` (production-like with all services)
 - Stop: `make stop`
 - Restart: `make restart`
 - View logs: `make logs`
@@ -84,18 +95,21 @@ DAILY USAGE
 - Deploy: `make deploy` (production-ready with health checks)
 
 **🔍 Debugging & Validation**
+- **Health check: `make health-check`** (verify all services are working) ⭐
+- Full debug: `make debug-all` (comprehensive system + frontend + backend)
+- Frontend debug: `make frontend-debug` (React-specific troubleshooting)
 - System check: `make system-check` (comprehensive validation)
 - Environment check: `make validate-env` (Python, venv, .env files)
 - Docker check: `make check-docker` (Docker installation & status)
 - Setup venv: `make setup-venv` (create virtual environment)
 - Status check: `make status` (running containers)
-- Backend health: `curl http://localhost:8888/health`
 
 **💡 For Non-Coders with Cursor**
 1. Run `make system-check` (validates everything)
 2. Run `make dev-setup` once
 3. Use `make dev-start` daily
-4. If anything breaks: `make dev-reset`
+4. Check health: `make health-check` (verify everything works)
+5. If anything breaks: `make dev-reset`
 
 **🔄 Version Philosophy**
 - **Latest stable versions** for security and performance

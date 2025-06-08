@@ -7,7 +7,7 @@ This module defines the interface for user data operations.
 from abc import ABC, abstractmethod
 from typing import Optional, List
 
-from ..models.user import User, UserCreate, UserUpdate
+from api.models.user import User, UserCreate, UserUpdate
 
 class UserRepository(ABC):
     """Interface for user data operations."""

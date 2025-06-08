@@ -20,8 +20,8 @@ from ..services.project_service import ProjectService
 from ..models.project import Project, ProjectRef, ProjectUpdate
 from ..services.ai_service import AIService
 from ..models.ai import RelevanceExtraction
-# from ..services.action_item_service import ActionItemService
-# from ..models.action_item import ActionItemCreate, ActionItemUpdate
+from ..services.action_item_service import ActionItemService
+from ..models.action_item import ActionItemCreate, ActionItemUpdate
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -40,7 +40,7 @@ class NoteService:
         project_repository: Optional[ProjectRepository] = None,
         project_service: Optional[ProjectService] = None,
         ai_service: Optional[AIService] = None,
-        action_item_service: Optional[object] = None
+        action_item_service: Optional[ActionItemService] = None
     ):
         """
         Initialize the NoteService with repositories and services.
@@ -123,8 +123,8 @@ class NoteService:
             created_note = await self.note_repository.create(note_data)
             logger.info(f"Successfully created note with ID: {created_note.id}")
             
-            # CapA: Manage Action Items based on note content (temporarily disabled)
-            if False and self.ai_service and self.action_item_service:
+            # CapA: Manage Action Items based on note content (enabled)
+            if self.ai_service and self.action_item_service:
                 logger.info(f"Starting CapA: Action item management for note {created_note.id}")
                 try:
                     # Get existing action items for the user
