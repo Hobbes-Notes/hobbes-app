@@ -418,42 +418,37 @@ class DynamoDBNoteRepository(NoteRepository):
         try:
             page = pagination.page
             page_size = pagination.page_size
-            exclusive_start_key = pagination.exclusive_start_key
             
-            # Query the Notes table for the user
-            if exclusive_start_key:
-                response = self.dynamodb_client.query(
-                    table_name=self.table_name,
-                    index_name='user_id-created_at-index',
-                    key_condition_expression="user_id = :user_id",
-                    expression_attribute_values={":user_id": user_id},
-                    scan_index_forward=False,  # Sort by created_at in descending order
-                    limit=page_size,
-                    exclusive_start_key=exclusive_start_key
-                )
-            else:
-                response = self.dynamodb_client.query(
-                    table_name=self.table_name,
-                    index_name='user_id-created_at-index',
-                    key_condition_expression="user_id = :user_id",
-                    expression_attribute_values={":user_id": user_id},
-                    scan_index_forward=False,  # Sort by created_at in descending order
-                    limit=page_size
-                )
+            # Query the Notes table using the simple user_id-index (like Action Items)
+            response = self.dynamodb_client.query(
+                table_name=self.table_name,
+                index_name='user_id-index',
+                key_condition_expression="user_id = :user_id",
+                expression_attribute_values={":user_id": user_id}
+            )
             
-            # Add project references to each note
+            # Convert all items to Note objects and add project references
             notes = []
             for note_dict in response.get('Items', []):
                 note_dict['projects'] = await self.get_projects_for_note(note_dict['id'])
                 notes.append(self._dict_to_note(note_dict))
             
+            # Sort by created_at in descending order (newest first) in memory
+            notes.sort(key=lambda x: x.created_at, reverse=True)
+            
+            # Apply pagination manually
+            start_index = (page - 1) * page_size
+            end_index = start_index + page_size
+            paginated_notes = notes[start_index:end_index]
+            has_more = end_index < len(notes)
+            
             # Prepare the response
             return PaginatedResponse[Note](
-                items=notes,
+                items=paginated_notes,
                 page=page,
                 page_size=page_size,
-                has_more='LastEvaluatedKey' in response,
-                last_evaluated_key=response.get('LastEvaluatedKey')
+                has_more=has_more,
+                last_evaluated_key=None  # Not using DynamoDB pagination for simplicity
             )
         except Exception as e:
             logger.error(f"Error getting notes for user {user_id}: {str(e)}")
