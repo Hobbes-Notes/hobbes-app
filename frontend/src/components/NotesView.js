@@ -1,15 +1,21 @@
 import React, { useState, useEffect } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { useApiService } from '../services/api';
 import { useAuth } from '../hooks/useAuth';
 
 const NotesView = () => {
   const { noteId } = useParams();
   const { user } = useAuth();
-  const { getAllNotes } = useApiService();
+  const { getAllNotes, getActionItems } = useApiService();
+  const navigate = useNavigate();
   const [note, setNote] = useState(null);
+  const [actionItems, setActionItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+
+  const handleActionItemClick = (actionItemId) => {
+    navigate(`/action-items/${actionItemId}`);
+  };
 
   useEffect(() => {
     const fetchNote = async () => {
@@ -25,6 +31,29 @@ const NotesView = () => {
           const foundNote = response.data.items.find(n => n.id === noteId);
           if (foundNote) {
             setNote(foundNote);
+            
+            // Get action items linked to this note
+            try {
+              console.log('Fetching action items for note:', noteId);
+              const actionItemsResponse = await getActionItems();
+              console.log('Action items response:', actionItemsResponse);
+              
+              // Backend returns APIResponse with data field containing the actual action items
+              const actionItemsData = actionItemsResponse.data?.data || actionItemsResponse.data;
+              if (actionItemsData) {
+                console.log('All action items:', actionItemsData);
+                const linkedActionItems = actionItemsData
+                  .filter(item => item.source_note_id === noteId)
+                  .sort((a, b) => new Date(b.created_at) - new Date(a.created_at)); // Sort by created timestamp, newest first
+                console.log('Linked action items for note', noteId, ':', linkedActionItems);
+                setActionItems(linkedActionItems);
+              } else {
+                console.log('No action items data in response');
+              }
+            } catch (actionError) {
+              console.error('Error fetching action items:', actionError);
+              // Don't fail the whole component if action items fail
+            }
           } else {
             setError('Note not found');
           }
@@ -74,7 +103,8 @@ const NotesView = () => {
         <div className="mb-6">
           <h1 className="text-2xl font-bold text-gray-900 mb-2">Note</h1>
           <div className="text-sm text-gray-500">
-            Created: {new Date(note.created_at).toLocaleDateString()} at {new Date(note.created_at).toLocaleTimeString()}
+            <div>Created: {new Date(note.created_at).toLocaleDateString()} at {new Date(note.created_at).toLocaleTimeString()}</div>
+            <div>Note ID: <span className="font-mono text-xs bg-gray-100 px-1 py-0.5 rounded">{note.id}</span></div>
           </div>
         </div>
 
@@ -83,6 +113,28 @@ const NotesView = () => {
             {note.content}
           </div>
         </div>
+
+        {actionItems.length > 0 && (
+          <div className="mt-6 pt-4 border-t border-gray-200">
+            <h3 className="text-sm font-medium text-gray-500 mb-2">Generated Action Items ({actionItems.length})</h3>
+            <div className="flex flex-wrap gap-2">
+              {actionItems.map((item) => (
+                <button
+                  key={item.id}
+                  onClick={() => handleActionItemClick(item.id)}
+                  className={`px-2 py-1 text-xs font-mono rounded border transition-colors cursor-pointer hover:opacity-80 ${
+                    item.status === 'completed' 
+                      ? 'bg-green-50 text-green-700 border-green-200 hover:bg-green-100' 
+                      : 'bg-yellow-50 text-yellow-700 border-yellow-200 hover:bg-yellow-100'
+                  }`}
+                  title={`${item.task} (${item.status}) - Click to view details`}
+                >
+                  {item.id}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
         {note.projects && note.projects.length > 0 && (
           <div className="mt-6 pt-4 border-t border-gray-200">

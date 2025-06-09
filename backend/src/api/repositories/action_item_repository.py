@@ -56,13 +56,14 @@ class ActionItemRepository:
                 "projects": action_item_data.projects,
                 "created_at": current_time,
                 "updated_at": current_time,
-                "user_id": action_item_data.user_id
+                "user_id": action_item_data.user_id,
+                "source_note_id": action_item_data.source_note_id
             }
             
             # Save to DynamoDB
             await self.dynamodb_client.put_item(self.table_name, action_item_record)
             
-            logger.info(f"Created action item: {action_item_id}")
+            logger.info(f"✅ Repository: Created action item {action_item_id} with source_note_id={action_item_record.get('source_note_id')}")
             return ActionItem(**action_item_record)
             
         except Exception as e:
@@ -150,6 +151,10 @@ class ActionItemRepository:
             if update_data.projects is not None:
                 update_expression_parts.append("projects = :projects")
                 expression_attribute_values[":projects"] = update_data.projects
+            
+            if update_data.source_note_id is not None:
+                update_expression_parts.append("source_note_id = :source_note_id")
+                expression_attribute_values[":source_note_id"] = update_data.source_note_id
             
             # Always update the updated_at timestamp
             update_expression_parts.append("updated_at = :updated_at")

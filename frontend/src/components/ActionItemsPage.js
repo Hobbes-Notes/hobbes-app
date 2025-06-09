@@ -1,13 +1,23 @@
-import React, { useState } from 'react';
-import { useParams, useOutletContext } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { useParams, useOutletContext, useNavigate } from 'react-router-dom';
+import { useApiService } from '../services/api';
+import { useAuth } from '../hooks/useAuth';
 
 const ActionItemsPage = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+
   const { actionItemId } = useParams();
   const { actionItems = [] } = useOutletContext();
+  const navigate = useNavigate();
+  const { user } = useAuth();
+  const { getAllNotes } = useApiService();
 
-  // No need to fetch action items - they come from parent component
+
+
+  const handleNoteClick = (noteId) => {
+    navigate(`/notes/${noteId}`);
+  };
 
   // If specific action item is selected, show only that one
   const selectedActionItem = actionItemId ? 
@@ -105,6 +115,17 @@ const ActionItemsPage = () => {
           <div className="text-sm text-gray-500 border-t border-gray-200 pt-4">
             <p>Created: {new Date(selectedActionItem.created_at).toLocaleString()}</p>
             <p>Updated: {new Date(selectedActionItem.updated_at).toLocaleString()}</p>
+            {selectedActionItem.source_note_id && (
+                              <p>Source Note: 
+                  <button
+                    onClick={() => handleNoteClick(selectedActionItem.source_note_id)}
+                    className="font-mono text-xs bg-blue-100 hover:bg-blue-200 text-blue-800 px-2 py-1 rounded ml-1 transition-colors cursor-pointer"
+                    title="Click to view note"
+                  >
+                    {selectedActionItem.source_note_id}
+                  </button>
+                </p>
+            )}
           </div>
         </div>
       </div>
@@ -161,6 +182,17 @@ const ActionItemsPage = () => {
 
             <div className="text-xs text-gray-500">
               Created: {new Date(item.created_at).toLocaleDateString()}
+              {item.source_note_id && (
+                <span className="ml-2">• Source Note: 
+                  <button
+                    onClick={() => handleNoteClick(item.source_note_id)}
+                    className="font-mono text-xs bg-blue-100 hover:bg-blue-200 text-blue-800 px-1 py-0.5 rounded transition-colors cursor-pointer"
+                    title="Click to view note"
+                  >
+                    {item.source_note_id}
+                  </button>
+                </span>
+              )}
             </div>
           </div>
         ))}

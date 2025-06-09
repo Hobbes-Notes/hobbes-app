@@ -88,7 +88,12 @@ const ProjectsPage = () => {
     try {
       const response = await getActionItems();
       if (response.data && response.data.success) {
-        setActionItems(response.data.data || []);
+        const actionItemsData = response.data.data || [];
+        // Sort by created timestamp, newest first
+        const sortedActionItems = actionItemsData.sort((a, b) => 
+          new Date(b.created_at) - new Date(a.created_at)
+        );
+        setActionItems(sortedActionItems);
       }
     } catch (error) {
       console.error('Error fetching action items in ProjectsPage:', error);
