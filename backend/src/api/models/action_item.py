@@ -13,6 +13,7 @@ class ActionItemCreate(BaseModel):
     type: str = "task"
     projects: List[str] = []
     user_id: str
+    source_note_id: Optional[str] = None
 
 class ActionItemUpdate(BaseModel):
     task: Optional[str] = None
@@ -24,6 +25,7 @@ class ActionItemUpdate(BaseModel):
     status: Optional[str] = None
     type: Optional[str] = None
     projects: Optional[List[str]] = None
+    source_note_id: Optional[str] = None
 
 class ActionItem(BaseModel):
     id: str
@@ -38,4 +40,5 @@ class ActionItem(BaseModel):
     projects: List[str] = []
     created_at: str
     updated_at: str
-    user_id: str 
+    user_id: str
+    source_note_id: Optional[str] = None 

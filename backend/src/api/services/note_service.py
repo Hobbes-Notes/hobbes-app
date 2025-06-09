@@ -172,10 +172,12 @@ class NoteService:
                                 status=operation.get("status", "open"),
                                 type=operation.get("type", "task"),
                                 projects=[],  # CapA doesn't handle project tagging - will be done by CapB
-                                user_id=note_data.user_id
+                                user_id=note_data.user_id,
+                                source_note_id=created_note.id
                             )
+                            logger.info(f"CapA: Creating action item with source_note_id={created_note.id}")
                             new_item = await self.action_item_service.create_action_item(action_create)
-                            logger.info(f"Created new action item: {new_item.id} - {new_item.task[:50]}...")
+                            logger.info(f"✅ CapA: Created action item {new_item.id} with source_note_id={new_item.source_note_id} - {new_item.task[:50]}...")
                             
                         elif action_type in ["update", "complete"]:
                             # Update existing action item
