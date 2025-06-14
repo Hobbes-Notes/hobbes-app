@@ -7,7 +7,7 @@ This module defines the interface for project repository operations.
 from abc import ABC, abstractmethod
 from typing import Dict, List, Optional
 
-from ..models.project import Project, ProjectCreate, ProjectUpdate
+from api.models.project import Project, ProjectCreate, ProjectUpdate
 
 class ProjectRepository(ABC):
     """

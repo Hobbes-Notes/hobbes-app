@@ -1,7 +1,7 @@
 """
 AI Repository Implementation
 
-This module provides an in-memory implementation of the AI repository interface.
+This module provides DynamoDB implementation of the AI repository interface.
 """
 
 import logging
@@ -14,10 +14,14 @@ from datetime import datetime
 from typing import Dict, List, Optional, Any
 import os
 from decimal import Decimal
+from fastapi import HTTPException
 
 from api.repositories.ai_repository import AIRepository
 from api.models.ai import AIConfiguration, AIUseCase
-from ...config.default_ai_configs import DEFAULT_CONFIGS
+from infrastructure.dynamodb_client import get_dynamodb_client
+
+# Import default configurations
+from api.config.default_ai_configs import DEFAULT_CONFIGS
 
 # Set up logging
 logger = logging.getLogger(__name__)

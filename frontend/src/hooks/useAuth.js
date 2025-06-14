@@ -40,7 +40,9 @@ export const AuthProvider = ({ children }) => {
       // Clear user state and tokens
       setUser(null);
       setAccessToken(null);
-      if (shouldRedirect) {
+      
+      // Only set error and redirect if explicitly requested and not on login page
+      if (shouldRedirect && window.location.pathname !== '/login') {
         setError('Session expired. Please login again.');
         navigate('/login');
       }
@@ -51,15 +53,15 @@ export const AuthProvider = ({ children }) => {
   // Check for existing session
   useEffect(() => {
     let mounted = true;
-    let retryCount = 0;
-    const maxRetries = 3;
     
     const checkAuth = async () => {
       if (!mounted) return;
       
       try {
         setLoading(true);
-        // First try to refresh the token
+        setError(null);
+        
+        // First try to refresh the token - but handle the case where there's no session gracefully
         const newToken = await refreshAccessToken(false);
         
         if (mounted && newToken) {
@@ -68,24 +70,18 @@ export const AuthProvider = ({ children }) => {
             headers: { Authorization: `Bearer ${newToken}` }
           });
           setUser(userResponse.data);
-          setError(null);
         }
       } catch (error) {
         console.error('Session validation failed:', error);
         if (mounted) {
-          if (error.response?.status === 401) {
-            if (retryCount < maxRetries) {
-              retryCount++;
-              console.log(`Retrying auth check (${retryCount}/${maxRetries})...`);
-              setTimeout(checkAuth, 1000); // Retry after 1 second
-              return;
-            }
-            setError('Session expired. Please login again.');
-            navigate('/login');
-          }
-          // Clear any stale state
+          // If there's no valid session, just clear state and don't show error message
+          // This is normal for a fresh visit to the site
           setUser(null);
           setAccessToken(null);
+          // Only show error and navigate if we're not already on the login page
+          if (window.location.pathname !== '/login') {
+            setError(null); // Don't show session expired error on first load
+          }
         }
       } finally {
         if (mounted) {

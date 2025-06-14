@@ -1,13 +1,13 @@
 """
 AI File Repository Interface
 
-This module defines the interface for AI file repositories.
+This module defines the interface for AI file repository operations.
 """
 
 from abc import ABC, abstractmethod
 from typing import List, Optional, Dict, Any
 
-from ..models.ai_file import AIFileRecord, AIFileState
+from api.models.ai_file import AIFileRecord, AIFileState
 
 class AIFileRepository(ABC):
     """

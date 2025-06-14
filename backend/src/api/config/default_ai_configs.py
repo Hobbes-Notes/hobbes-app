@@ -1,10 +1,10 @@
 """
 Default AI Configurations
 
-This module provides default configurations for AI operations.
+This module contains default AI configurations for various use cases.
 """
 
-from ..models.ai import AIUseCase
+from api.models.ai import AIUseCase
 
 DEFAULT_CONFIGS = {
     AIUseCase.PROJECT_SUMMARY: {
@@ -102,5 +102,52 @@ DEFAULT_CONFIGS = {
         "max_tokens": 1500,
         "temperature": 0.3,
         "description": "Default action management configuration"
+    },
+    
+    AIUseCase.PROJECT_TAGGING: {
+        "model": "gpt-4o-mini",
+        "system_prompt": "You are an intelligent project tagging specialist. You analyze action items and user projects to determine which projects each action item belongs to. You excel at understanding semantic relationships between tasks and project contexts.",
+        "user_prompt_template": """
+        ACTION ITEMS TO TAG:
+        {action_items}
+        
+        USER'S PROJECTS:
+        {user_projects}
+        
+        TASK:
+        For each action item, determine which projects (if any) it belongs to based on semantic similarity, context, and relevance.
+        
+        INSTRUCTIONS:
+        1. **SEMANTIC ANALYSIS**: Match action items to projects based on:
+           - Keywords and terminology overlap
+           - Thematic similarity (e.g., "vacation planning", "work setup", "learning goals")
+           - Contextual relevance (tools, people, places mentioned)
+           - Project descriptions and goals
+        
+        2. **MULTIPLE PROJECTS**: An action item can belong to multiple projects if relevant
+        
+        3. **NO FORCING**: If an action item doesn't clearly belong to any project, leave project_ids as empty array
+        
+        4. **HIERARCHICAL CONSIDERATION**: Consider parent-child project relationships
+           - If an action item matches a child project, also consider if it belongs to the parent
+           - Use project hierarchy information when available
+        
+        5. **ENTITIES MATCHING**: Look for overlap in:
+           - People mentioned in action items vs projects
+           - Places/locations referenced
+           - Tools/technologies involved
+           - Themes and contexts
+        
+        EXAMPLES:
+        - Action: "Book flight to Tokyo" + Project: "Japan Vacation Planning" → Match
+        - Action: "Learn React hooks" + Project: "Frontend Development Skills" → Match
+        - Action: "Call mom" + Projects: "Work Setup", "Fitness Goals" → No match (empty array)
+        - Action: "Deploy dashboard" + Projects: "Client Website", "Internal Tools" → Consider both based on context
+        
+        IMPORTANT: Only map action items to projects where there's a clear semantic relationship. When in doubt, err on the side of not tagging rather than incorrect tagging.
+        """,
+        "max_tokens": 1000,
+        "temperature": 0.2,
+        "description": "Default project tagging configuration"
     }
 } 

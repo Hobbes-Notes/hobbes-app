@@ -1,0 +1,37 @@
+{
+  "total_runs": 0,
+  "successful_runs": 0,
+  "failed_runs": 0,
+  "total_action_items_processed": 0,
+  "total_action_items_tagged": 0,
+  "average_processing_time": 0,
+  "error_counts": {},
+  "hourly_stats": {
+    "2025-06-14-16": {
+      "runs": 1,
+      "successful_runs": 0,
+      "failed_runs": 1,
+      "items_processed": 4,
+      "items_tagged": 0,
+      "errors": {}
+    },
+    "2025-06-14-17": {
+      "runs": 10,
+      "successful_runs": 4,
+      "failed_runs": 6,
+      "items_processed": 78,
+      "items_tagged": 27,
+      "errors": {}
+    }
+  },
+  "daily_stats": {
+    "2025-06-14": {
+      "runs": 11,
+      "successful_runs": 4,
+      "failed_runs": 7,
+      "items_processed": 82,
+      "items_tagged": 27,
+      "errors": {}
+    }
+  }
+}

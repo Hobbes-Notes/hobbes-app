@@ -24,7 +24,7 @@ services:
     ports:
       - "8888:8888"
     volumes:
-      - ./backend/src:/code
+      - .:/code
     env_file:
       - .env
       - ./backend/.env

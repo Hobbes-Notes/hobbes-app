@@ -1,7 +1,8 @@
 """
 AI File Consumer
 
-This module provides a consumer for processing AI files from SQS.
+This module provides functionality for consuming AI file processing messages
+from SQS queues and processing them asynchronously.
 """
 
 import logging
@@ -12,8 +13,9 @@ import signal
 import sys
 from typing import Dict, Any, Optional
 import threading
+from datetime import datetime
 
-from ..infrastructure.sqs_client import get_sqs_client
+from infrastructure.sqs_client import get_sqs_client
 from api.services.ai_file_service import AIFileService
 from api.models.ai_file import AIFileState
 
@@ -221,6 +223,6 @@ def create_consumer(queue_name: str = None, ai_file_service: AIFileService = Non
     
     if ai_file_service is None:
         from api.services import get_ai_file_service
-        ai_file_service = get_ai_file_service()
+ai_file_service = get_ai_file_service()
         
     return AIFileConsumer(queue_name, ai_file_service) 

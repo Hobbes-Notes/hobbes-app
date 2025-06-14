@@ -6,8 +6,8 @@ from fastapi import HTTPException
 
 from api.repositories.note_repository import NoteRepository
 from api.models.note import Note, NoteCreate, NoteUpdate
-from ...models.pagination import PaginatedResponse, PaginationParams
-from ...models.project import ProjectRef
+from api.models.pagination import PaginatedResponse, PaginationParams
+from api.models.project import ProjectRef
 from infrastructure.dynamodb_client import get_dynamodb_client
 
 # Set up logging
@@ -452,4 +452,53 @@ class DynamoDBNoteRepository(NoteRepository):
             )
         except Exception as e:
             logger.error(f"Error getting notes for user {user_id}: {str(e)}")
+            raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+    
+    async def get_notes_count_by_user(self, user_id: str) -> int:
+        """
+        Get total count of notes for a specific user.
+        
+        Args:
+            user_id: The unique identifier of the user
+            
+        Returns:
+            Total number of notes for the user
+        """
+        try:
+            # Query the Notes table using the user_id-index and count items
+            response = self.dynamodb_client.query(
+                table_name=self.table_name,
+                index_name='user_id-index',
+                key_condition_expression="user_id = :user_id",
+                expression_attribute_values={":user_id": user_id},
+                select='COUNT'  # Only count items, don't return data
+            )
+            
+            return response.get('Count', 0)
+        except Exception as e:
+            logger.error(f"Error getting notes count for user {user_id}: {str(e)}")
+            raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+    
+    async def get_notes_count_by_project(self, project_id: str) -> int:
+        """
+        Get total count of notes for a specific project.
+        
+        Args:
+            project_id: The unique identifier of the project
+            
+        Returns:
+            Total number of notes for the project
+        """
+        try:
+            # Query the ProjectNotes table for the project and count items
+            response = self.dynamodb_client.query(
+                table_name=self.project_notes_table_name,
+                key_condition_expression="project_id = :project_id",
+                expression_attribute_values={":project_id": project_id},
+                select='COUNT'  # Only count items, don't return data
+            )
+            
+            return response.get('Count', 0)
+        except Exception as e:
+            logger.error(f"Error getting notes count for project {project_id}: {str(e)}")
             raise HTTPException(status_code=500, detail=f"Database error: {str(e)}") 

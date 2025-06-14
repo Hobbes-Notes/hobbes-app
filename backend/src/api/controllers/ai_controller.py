@@ -1,20 +1,20 @@
 """
-AI Controller Module
+AI Controller
 
-This controller provides endpoints for managing AI configurations.
-These endpoints do not require authentication as they are used for system configuration.
+Handles HTTP requests for AI configuration management operations.
+Follows the three-things rule: parse input, call service, return response.
 """
 
 import logging
-from fastapi import APIRouter, Depends, HTTPException, status, Request
+from fastapi import APIRouter, HTTPException, status, Request, Depends
 from typing import List, Dict, Any
 from datetime import datetime
 import json
 
-from ..models.ai import AIConfiguration, AIUseCase
-from ..services.ai_service import AIService
-from ..repositories.impl import get_ai_service
-from ..models.api import APIResponse
+from api.models.ai import AIConfiguration, AIUseCase
+from api.services import get_ai_service
+from api.services.ai_service import AIService
+from api.models.api import APIResponse
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -26,18 +26,13 @@ router = APIRouter(
     responses={404: {"description": "Not found"}},
 )
 
-# Dependency to get AI service
-def get_ai_service_dependency() -> AIService:
-    """
-    Get the AI service instance.
-    """
-    return get_ai_service()
+# All endpoints use the centralized service factory via Depends(get_ai_service)
 
 @router.get("/configurations/{use_case}", response_model=APIResponse)
 async def get_configurations(
     request: Request,
     use_case: str,
-    ai_service: AIService = Depends(get_ai_service_dependency)
+    ai_service: AIService = Depends(get_ai_service)
 ):
     """
     Get all configurations for a use case.
@@ -75,7 +70,7 @@ async def get_configurations(
 async def get_active_configuration(
     request: Request,
     use_case: str,
-    ai_service: AIService = Depends(get_ai_service_dependency)
+    ai_service: AIService = Depends(get_ai_service)
 ):
     """
     Get the active configuration for a use case.
@@ -122,7 +117,7 @@ async def get_active_configuration(
 async def get_available_parameters(
     request: Request,
     use_case: str,
-    ai_service: AIService = Depends(get_ai_service_dependency)
+    ai_service: AIService = Depends(get_ai_service)
 ):
     """
     Get available parameters for a use case.
@@ -170,7 +165,7 @@ async def get_available_parameters(
 async def get_response_format(
     request: Request,
     use_case: str,
-    ai_service: AIService = Depends(get_ai_service_dependency)
+    ai_service: AIService = Depends(get_ai_service)
 ):
     """
     Get the expected response format for a use case.
@@ -212,7 +207,7 @@ async def get_configuration(
     request: Request,
     use_case: str,
     version: int,
-    ai_service: AIService = Depends(get_ai_service_dependency)
+    ai_service: AIService = Depends(get_ai_service)
 ):
     """
     Get a specific configuration by use case and version.
@@ -257,7 +252,7 @@ async def get_configuration(
 async def create_configuration(
     request: Request,
     configuration: AIConfiguration,
-    ai_service: AIService = Depends(get_ai_service_dependency)
+    ai_service: AIService = Depends(get_ai_service)
 ):
     """
     Create a new configuration. The version will be automatically generated regardless of the version provided in the input.
@@ -302,7 +297,7 @@ async def set_active_configuration(
     request: Request,
     use_case: str,
     version: int,
-    ai_service: AIService = Depends(get_ai_service_dependency)
+    ai_service: AIService = Depends(get_ai_service)
 ):
     """
     Set a configuration as active.
@@ -344,7 +339,7 @@ async def delete_configuration(
     request: Request,
     use_case: str,
     version: int,
-    ai_service: AIService = Depends(get_ai_service_dependency)
+    ai_service: AIService = Depends(get_ai_service)
 ):
     """
     Delete a configuration.

@@ -7,9 +7,9 @@ This module defines the interface for note repository operations.
 from abc import ABC, abstractmethod
 from typing import Dict, List, Optional
 
-from ..models.note import Note, NoteCreate, NoteUpdate
-from ..models.pagination import PaginatedResponse, PaginationParams
-from ..models.project import ProjectRef
+from api.models.note import Note, NoteCreate, NoteUpdate
+from api.models.pagination import PaginatedResponse, PaginationParams
+from api.models.project import ProjectRef
 
 class NoteRepository(ABC):
     """
@@ -46,4 +46,12 @@ class NoteRepository(ABC):
     
     @abstractmethod
     async def associate_note_with_project(self, note_id: str, project_id: str, timestamp: str) -> None:
+        pass
+    
+    @abstractmethod
+    async def get_notes_count_by_user(self, user_id: str) -> int:
+        pass
+    
+    @abstractmethod
+    async def get_notes_count_by_project(self, project_id: str) -> int:
         pass 

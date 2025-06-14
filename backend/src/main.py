@@ -9,8 +9,8 @@ from api.controllers.note_controller import router as note_router
 # from api.controllers.ai_controller import router as ai_router
 # from api.controllers.ai_file_controller import router as ai_file_router
 from api.controllers.action_item_controller import router as action_item_router
-from api.services.auth_service import AuthService
-from api.services.user_service import UserService
+# Phase 3: Use FastAPI dependencies instead of direct service imports
+from api.services import setup_dependencies, get_auth_service, get_user_service
 # from api.services import get_ai_file_service
 from api.repositories.impl import (
     get_project_repository, 
@@ -58,9 +58,12 @@ app.add_middleware(
 # Add logging middleware
 # app.add_middleware(LoggingMiddleware)
 
-# Create services
-auth_service = AuthService()
-user_service = UserService()
+# Phase 3: Initialize FastAPI dependencies
+setup_dependencies()
+
+# Get services from dependency system
+auth_service = get_auth_service()
+user_service = get_user_service()
 
 # Create DynamoDB tables if they don't exist
 @app.on_event("startup")

@@ -1,24 +1,42 @@
+"""
+Auth Controller
+
+Handles HTTP requests for authentication operations.
+Follows the three-things rule: parse input, call service, return response.
+"""
+
 from fastapi import APIRouter, Depends, HTTPException, status, Body, Response, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from typing import Dict, Optional
 
 from api.models.user import User
+from api.services import get_auth_service
 from api.services.auth_service import AuthService
 from api.services.jwt_service import create_tokens, verify_token
 
-security = HTTPBearer()
 router = APIRouter()
-
-auth_service = AuthService()
-
-def get_auth_service() -> AuthService:
-    return auth_service
+security = HTTPBearer()
 
 async def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(security),
     auth_service: AuthService = Depends(get_auth_service)
 ) -> User:
-    return await auth_service.validate_token(credentials.credentials)
+    """Get the current authenticated user from JWT token."""
+    try:
+        user = await auth_service.get_current_user(credentials.credentials)
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid authentication credentials",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        return user
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid authentication credentials",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
 
 @router.post("/google", response_model=Dict)
 async def google_auth(

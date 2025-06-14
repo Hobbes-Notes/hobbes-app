@@ -11,17 +11,19 @@ from fastapi import HTTPException, Depends
 from datetime import datetime
 from litellm import completion
 import json
+import time
 
-from ..models.note import Note, NoteCreate, NoteUpdate, PaginatedNotes
-from ..repositories.note_repository import NoteRepository
-from ..repositories.project_repository import ProjectRepository
-from ..models.pagination import PaginationParams
-from ..services.project_service import ProjectService
-from ..models.project import Project, ProjectRef, ProjectUpdate
-from ..services.ai_service import AIService
-from ..models.ai import RelevanceExtraction
-from ..services.action_item_service import ActionItemService
-from ..models.action_item import ActionItemCreate, ActionItemUpdate
+from api.models.note import Note, NoteCreate, NoteUpdate, PaginatedNotes
+from api.repositories.note_repository import NoteRepository
+from api.repositories.project_repository import ProjectRepository
+from api.models.pagination import PaginationParams
+from api.services.project_service import ProjectService
+from api.models.project import Project, ProjectRef, ProjectUpdate
+from api.services.ai_service import AIService
+from api.models.ai import RelevanceExtraction
+from api.services.action_item_service import ActionItemService
+from api.models.action_item import ActionItemCreate, ActionItemUpdate
+from api.services.capb_service import CapBService
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -40,7 +42,8 @@ class NoteService:
         project_repository: Optional[ProjectRepository] = None,
         project_service: Optional[ProjectService] = None,
         ai_service: Optional[AIService] = None,
-        action_item_service: Optional[ActionItemService] = None
+        action_item_service: Optional[ActionItemService] = None,
+        capb_service: Optional['CapBService'] = None
     ):
         """
         Initialize the NoteService with repositories and services.
@@ -51,12 +54,14 @@ class NoteService:
             project_service: Service for project operations
             ai_service: Service for AI operations (optional)
             action_item_service: Service for action item operations (optional)
+            capb_service: Service for CapB project tagging operations (optional)
         """
         self.note_repository = note_repository
         self.project_repository = project_repository
         self.project_service = project_service
         self.ai_service = ai_service or AIService()
         self.action_item_service = action_item_service
+        self.capb_service = capb_service
     
     async def get_note(self, note_id: str) -> Note:
         """
@@ -107,7 +112,8 @@ class NoteService:
             The created note
         """
         try:
-            logger.info(f"Starting note creation process for user {note_data.user_id}")
+            overall_start_time = time.time()
+            logger.info(f"🚀 TIMING: Starting note creation process for user {note_data.user_id}")
             logger.debug(f"Note content (first 100 chars): '{note_data.content[:100]}...'")
             
             # Set created_at and updated_at if not provided
@@ -119,19 +125,25 @@ class NoteService:
                 logger.debug(f"Setting updated_at to {note_data.updated_at}")
             
             # Create the note
+            note_creation_start = time.time()
             logger.debug(f"Calling note repository to create note")
             created_note = await self.note_repository.create(note_data)
-            logger.info(f"Successfully created note with ID: {created_note.id}")
+            note_creation_time = time.time() - note_creation_start
+            logger.info(f"⏱️ TIMING: Note repository creation took {note_creation_time:.2f}s - Created note ID: {created_note.id}")
             
             # CapA: Manage Action Items based on note content (enabled)
             if self.ai_service and self.action_item_service:
-                logger.info(f"Starting CapA: Action item management for note {created_note.id}")
+                capa_start_time = time.time()
+                logger.info(f"🤖 TIMING: Starting CapA (Action Item Management) for note {created_note.id}")
                 try:
                     # Get existing action items for the user
+                    fetch_items_start = time.time()
                     existing_action_items = await self.action_item_service.get_action_items_by_user(note_data.user_id)
-                    logger.debug(f"Found {len(existing_action_items)} existing action items")
+                    fetch_items_time = time.time() - fetch_items_start
+                    logger.info(f"⏱️ TIMING: Fetching existing action items took {fetch_items_time:.2f}s - Found {len(existing_action_items)} items")
                     
                     # Prepare data for AI service (no user_projects needed for CapA)
+                    data_prep_start = time.time()
                     existing_action_items_json = json.dumps([
                         {
                             "id": item.id,
@@ -146,17 +158,21 @@ class NoteService:
                             "projects": item.projects
                         } for item in existing_action_items
                     ])
+                    data_prep_time = time.time() - data_prep_start
+                    logger.info(f"⏱️ TIMING: CapA data preparation took {data_prep_time:.2f}s")
                     
                     # Call CapA (focused only on action management)
+                    ai_call_start = time.time()
                     action_operations = await self.ai_service.manage_action_items({
                         "note_content": created_note.content,
                         "existing_action_items": existing_action_items_json,
                         "user_id": note_data.user_id
                     })
-                    
-                    logger.info(f"CapA suggested {len(action_operations)} action operations")
+                    ai_call_time = time.time() - ai_call_start
+                    logger.info(f"⏱️ TIMING: CapA AI service call took {ai_call_time:.2f}s - Suggested {len(action_operations)} operations")
                     
                     # Process action operations
+                    processing_start = time.time()
                     for operation in action_operations:
                         action_type = operation.get("action", "new")
                         
@@ -211,67 +227,43 @@ class NoteService:
                                 else:
                                     logger.warning(f"Could not find action item to {action_type}: {item_id}")
                     
+                    processing_time = time.time() - processing_start
+                    capa_total_time = time.time() - capa_start_time
+                    logger.info(f"⏱️ TIMING: CapA operation processing took {processing_time:.2f}s")
+                    logger.info(f"🏁 TIMING: CapA total time: {capa_total_time:.2f}s")
+                    
                 except Exception as e:
-                    logger.error(f"Error in CapA action management for note {created_note.id}: {str(e)}")
+                    capa_total_time = time.time() - capa_start_time
+                    logger.error(f"❌ TIMING: CapA failed after {capa_total_time:.2f}s - Error: {str(e)}")
                     logger.exception("Detailed exception information for CapA:")
             else:
                 logger.info(f"AI service or action item service not available, skipping CapA")
             
-            # OLD C1 FLOW - COMMENTED OUT FOR NEW APPROACH
-            # # Find relevant projects
-            # if self.ai_service:
-            #     logger.info(f"AI service available, finding relevant projects for note {created_note.id}")
-            #     try:
-            #         logger.debug(f"Calling _find_relevant_projects for note {created_note.id}")
-            #         relevant_projects = await self._find_relevant_projects(created_note)
-            #         logger.info(f"Found {len(relevant_projects)} relevant projects for note {created_note.id}")
-            #         
-            #         # Associate note with relevant projects
-            #         for idx, (project, extracted_content) in enumerate(relevant_projects):
-            #             logger.info(f"Processing association {idx+1}/{len(relevant_projects)}: note {created_note.id} with project {project.id} - '{project.name}'")
-            #             
-            #             logger.debug(f"Calling repository to associate note {created_note.id} with project {project.id}")
-            #             await self.note_repository.associate_note_with_project(
-            #                 created_note.id, 
-            #                 project.id, 
-            #                 extracted_content
-            #             )
-            #             logger.info(f"Successfully associated note {created_note.id} with project {project.id}")
-            #             
-            #             # Update project summary if AI service is available
-            #             try:
-            #                 logger.info(f"Starting project summary update for project {project.id} - '{project.name}'")
-            #                 
-            #                 # Use the extracted content from the current note
-            #                 logger.debug(f"Using extracted content from current note for project {project.id}")
-            #                 logger.debug(f"Extracted content length: {len(extracted_content)} chars")
-            #                 
-            #                 # Generate summary
-            #                 logger.info(f"Calling AI service to generate summary for project {project.id}")
-            #                 new_summary = await self.ai_service.generate_project_summary({
-            #                     "project_id": project.id,
-            #                     "project_name": project.name,
-            #                     "project_description": project.description,
-            #                     "current_summary": project.summary,
-            #                     "note_content": extracted_content
-            #                 })
-            #                 
-            #                 # Update project
-            #                 logger.info(f"Updating project {project.id} with new summary")
-            #                 await self.project_service.update_project(
-            #                     project.id,
-            #                     ProjectUpdate(summary=new_summary)
-            #                 )
-            #                 logger.info(f"Successfully updated summary for project {project.id}")
-            #             except Exception as e:
-            #                 logger.error(f"Error updating project summary for project {project.id}: {str(e)}")
-            #                 logger.exception(f"Detailed exception information for project summary update:")
-            #     except Exception as e:
-            #         logger.error(f"Error finding relevant projects for note {created_note.id}: {str(e)}")
-            #         logger.exception("Detailed exception information for finding relevant projects:")
-            # else:
-            #     logger.info(f"AI service not available, skipping project relevance check for note {created_note.id}")
+            # CapB: Tag Action Items with Projects (runs after CapA)
+            if self.capb_service:
+                capb_start_time = time.time()
+                logger.info(f"🏷️ TIMING: Starting CapB (Project Tagging) for action items after note {created_note.id}")
+                try:
+                    capb_result = await self.capb_service.run_for_user(note_data.user_id)
+                    capb_total_time = time.time() - capb_start_time
+                    
+                    if capb_result["success"]:
+                        logger.info(f"✅ TIMING: CapB completed successfully in {capb_total_time:.2f}s: {capb_result['message']}")
+                        logger.debug(f"CapB results: {capb_result['tagged_action_items']}/{capb_result['total_action_items']} action items tagged")
+                    else:
+                        logger.warning(f"⚠️ TIMING: CapB failed after {capb_total_time:.2f}s but note creation continues: {capb_result.get('error', 'Unknown error')}")
+                        
+                except Exception as e:
+                    capb_total_time = time.time() - capb_start_time
+                    logger.error(f"❌ TIMING: CapB error after {capb_total_time:.2f}s for note {created_note.id}: {str(e)}")
+                    logger.exception("Detailed exception information for CapB:")
+                    # CapB failure doesn't affect note creation success
+                    logger.info("Note creation continues despite CapB failure")
+            else:
+                logger.info(f"CapB service not available, skipping project tagging")
             
+            # Final steps
+            final_steps_start = time.time()
             logger.info(f"Note creation process completed successfully for note {created_note.id}")
             
             # Fetch the projects for the note before returning it (currently empty since we commented out C1)
@@ -279,10 +271,16 @@ class NoteService:
             projects_refs = await self.note_repository.get_projects_for_note(created_note.id)
             created_note.projects = projects_refs
             logger.debug(f"Found {len(projects_refs)} projects for note {created_note.id}")
+            final_steps_time = time.time() - final_steps_start
+            
+            overall_time = time.time() - overall_start_time
+            logger.info(f"⏱️ TIMING: Final steps took {final_steps_time:.2f}s")
+            logger.info(f"🏁 TIMING: TOTAL note creation process took {overall_time:.2f}s")
             
             return created_note
         except Exception as e:
-            logger.error(f"Error creating note: {str(e)}")
+            overall_time = time.time() - overall_start_time if 'overall_start_time' in locals() else 0
+            logger.error(f"❌ TIMING: Note creation failed after {overall_time:.2f}s - Error: {str(e)}")
             logger.exception("Detailed exception information for note creation:")
             raise
     
@@ -613,4 +611,36 @@ class NoteService:
             )
         except Exception as e:
             logger.error(f"Error getting notes for user {user_id}: {str(e)}")
-            raise HTTPException(status_code=500, detail=f"Error getting notes: {str(e)}") 
+            raise HTTPException(status_code=500, detail=f"Error getting notes: {str(e)}")
+    
+    async def get_notes_count_by_user(self, user_id: str) -> int:
+        """
+        Get total count of notes for a specific user.
+        
+        Args:
+            user_id: The unique identifier of the user
+            
+        Returns:
+            Total number of notes for the user
+        """
+        try:
+            return await self.note_repository.get_notes_count_by_user(user_id)
+        except Exception as e:
+            logger.error(f"Error getting notes count for user {user_id}: {str(e)}")
+            raise HTTPException(status_code=500, detail=f"Error getting notes count: {str(e)}")
+    
+    async def get_notes_count_by_project(self, project_id: str) -> int:
+        """
+        Get total count of notes for a specific project.
+        
+        Args:
+            project_id: The unique identifier of the project
+            
+        Returns:
+            Total number of notes for the project
+        """
+        try:
+            return await self.note_repository.get_notes_count_by_project(project_id)
+        except Exception as e:
+            logger.error(f"Error getting notes count for project {project_id}: {str(e)}")
+            raise HTTPException(status_code=500, detail=f"Error getting notes count: {str(e)}") 

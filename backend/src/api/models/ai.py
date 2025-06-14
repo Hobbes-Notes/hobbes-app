@@ -16,6 +16,7 @@ class AIUseCase(str, Enum):
     PROJECT_SUMMARY = "project_summary"
     RELEVANCE_EXTRACTION = "relevance_extraction"
     ACTION_MANAGEMENT = "action_management"
+    PROJECT_TAGGING = "project_tagging"
     
     @property
     def expected_params(self) -> List[str]:
@@ -25,7 +26,8 @@ class AIUseCase(str, Enum):
         params_map = {
             self.PROJECT_SUMMARY: ["project_name", "project_description", "current_summary", "note_content"],
             self.RELEVANCE_EXTRACTION: ["project_name", "project_description", "note_content", "project_hierarchy"],
-            self.ACTION_MANAGEMENT: ["note_content", "existing_action_items", "user_id"]
+            self.ACTION_MANAGEMENT: ["note_content", "existing_action_items", "user_id"],
+            self.PROJECT_TAGGING: ["action_items", "user_projects"]
         }
         return params_map.get(self, [])
     
@@ -41,7 +43,9 @@ class AIUseCase(str, Enum):
             "note_content": "The content of the note",
             "project_hierarchy": "The hierarchical structure of the project with all child projects in nested JSON format",
             "existing_action_items": "JSON list of existing action items that the user currently has",
-            "user_id": "The ID of the user"
+            "user_id": "The ID of the user",
+            "action_items": "JSON list of action items to tag with projects",
+            "user_projects": "JSON list of user's projects for tagging action items"
         }
         return {param: descriptions.get(param, "") for param in self.expected_params}
     
@@ -88,6 +92,19 @@ Return your response as a JSON object with the following structure:
                 "tools": ["list of tools/technologies mentioned"]
             },
             "type": "task|reminder|decision_point"
+        }
+    ]
+}
+
+Ensure your response is valid JSON and nothing else.
+""",
+            self.PROJECT_TAGGING: """
+Return your response as a JSON object with the following structure:
+{
+    "project_mappings": [
+        {
+            "action_item_id": "string_id_of_action_item",
+            "project_ids": ["array_of_project_ids_that_match"]
         }
     ]
 }

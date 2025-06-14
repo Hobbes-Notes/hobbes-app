@@ -39,6 +39,7 @@ const Sidebar = ({
 
   // State for data
   const [notes, setNotes] = useState([]);
+  const [allNotes, setAllNotes] = useState([]);
   const [loading, setLoading] = useState({
     notes: false
   });
@@ -50,18 +51,23 @@ const Sidebar = ({
   const [editingProject, setEditingProject] = useState(null);
   const [selectedParentId, setSelectedParentId] = useState(null);
 
-  // Fetch notes when notes section is expanded
+  // Fetch all notes to get total count and first 10 for display
   const fetchNotes = useCallback(async () => {
     if (!user || loading.notes) return;
 
     try {
       setLoading(prev => ({ ...prev, notes: true }));
+      console.log('🔍 Sidebar: Fetching notes for user:', user.id);
       const response = await getAllNotes(user.id);
+      console.log('📝 Sidebar: Notes response:', response.data);
+      
       if (response.data && response.data.items) {
-        setNotes(response.data.items);
+        console.log('✅ Sidebar: Setting notes - Total:', response.data.items.length, 'Showing:', Math.min(10, response.data.items.length));
+        setAllNotes(response.data.items); // Store all notes for count
+        setNotes(response.data.items.slice(0, 10)); // Show first 10 for display
       }
     } catch (error) {
-      console.error('Error fetching notes:', error);
+      console.error('❌ Sidebar: Error fetching notes:', error);
     } finally {
       setLoading(prev => ({ ...prev, notes: false }));
     }
@@ -85,10 +91,10 @@ const Sidebar = ({
 
   // Load notes on component mount to show count in sidebar
   useEffect(() => {
-    if (notes.length === 0) {
+    if (allNotes.length === 0) {
       fetchNotes();
     }
-  }, [notes.length, fetchNotes]);
+  }, [allNotes.length, fetchNotes]);
 
   const handleLogout = async () => {
     await logout();
@@ -303,7 +309,7 @@ const Sidebar = ({
             'notes', 
             'Notes', 
             <StickyNoteIcon className="w-4 h-4" />, 
-            notes.length
+            allNotes.length
           )}
           
           {sectionsExpanded.notes && (
@@ -329,10 +335,18 @@ const Sidebar = ({
                       </div>
                     </button>
                   ))}
-                  {notes.length === 0 && (
+                  {notes.length === 0 && !loading.notes && (
                     <p className="text-sm text-gray-500 py-4 text-center">
                       No notes yet
                     </p>
+                  )}
+                  {allNotes.length > 10 && (
+                    <button
+                      onClick={() => setNotes(allNotes)}
+                      className="w-full mt-2 px-3 py-2 text-sm text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded transition-colors"
+                    >
+                      Show All {allNotes.length} Notes
+                    </button>
                   )}
                 </div>
               )}

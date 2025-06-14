@@ -1,45 +1,29 @@
+"""
+Note Controller
+
+Handles HTTP requests for note management operations.
+Follows the three-things rule: parse input, call service, return response.
+"""
+
 from fastapi import APIRouter, HTTPException, Query, Depends
 from typing import List, Optional, Dict
 import json
 import logging
 
-from ..models.note import Note, NoteCreate, PaginatedNotes
-from ..services.note_service import NoteService
-from ..services.project_service import ProjectService
-from ..services.ai_service import AIService
-from ..services.action_item_service import ActionItemService
-from ..repositories.impl import (
-    get_note_repository, 
-    get_project_repository, 
-    get_ai_service, 
-    get_action_item_service
-)
+from api.models.note import Note, NoteCreate, PaginatedNotes
+from api.services import get_note_service
+from api.services.note_service import NoteService
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
-
-ai_service = get_ai_service()
-action_item_service = get_action_item_service()
-project_service = ProjectService(ai_service=ai_service)
-note_repository = get_note_repository()
-project_repository = get_project_repository()
-note_service = NoteService(
-    note_repository=note_repository,
-    project_repository=project_repository,
-    project_service=project_service,
-    ai_service=ai_service,
-    action_item_service=action_item_service
-)
-
-def get_note_service() -> NoteService:
-    return note_service
 
 @router.post("/notes", response_model=Note)
 async def create_note(
     note: NoteCreate,
     note_service: NoteService = Depends(get_note_service)
 ):
+    """Create a new note."""
     return await note_service.create_note(note)
 
 @router.get("/notes/{note_id}", response_model=Note)
@@ -47,7 +31,24 @@ async def get_note(
     note_id: str,
     note_service: NoteService = Depends(get_note_service)
 ):
+    """Get a note by ID."""
     return await note_service.get_note(note_id)
+
+@router.get("/notes/count", response_model=Dict[str, int])
+async def get_notes_count(
+    project_id: Optional[str] = None,
+    user_id: Optional[str] = None,
+    note_service: NoteService = Depends(get_note_service)
+):
+    """Get total count of notes. Requires either project_id or user_id."""
+    if project_id:
+        count = await note_service.get_notes_count_by_project(project_id)
+        return {"count": count}
+    elif user_id:
+        count = await note_service.get_notes_count_by_user(user_id)
+        return {"count": count}
+    else:
+        raise HTTPException(status_code=400, detail="Either project_id or user_id must be provided")
 
 @router.get("/notes", response_model=PaginatedNotes)
 async def list_notes(
@@ -58,6 +59,7 @@ async def list_notes(
     exclusive_start_key: Optional[str] = None,
     note_service: NoteService = Depends(get_note_service)
 ):
+    """List notes with pagination. Requires either project_id or user_id."""
     parsed_key = None
     if exclusive_start_key:
         try:

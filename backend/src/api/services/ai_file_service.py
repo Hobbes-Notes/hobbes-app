@@ -1,7 +1,8 @@
 """
-AI File Service
+AI File Service Layer
 
-This module provides services for AI file operations.
+This module provides service-level functionality for AI file operations,
+including file upload, processing, and management.
 """
 
 import logging
@@ -12,10 +13,11 @@ import csv
 import io
 from datetime import datetime
 from typing import Dict, List, Optional, Any, BinaryIO, Union
+from fastapi import HTTPException, UploadFile
 
-from ..models.ai_file import AIFile, AIFileRecord, AIFileState, AIFileInput, AIFileOutput
-from ..repositories.ai_file_repository import AIFileRepository
-from ..repositories.s3_repository import S3Repository
+from api.models.ai_file import AIFile, AIFileRecord, AIFileState, AIFileInput, AIFileOutput
+from api.repositories.ai_file_repository import AIFileRepository
+from api.repositories.s3_repository import S3Repository
 from api.services.ai_service import AIService
 from api.models.ai import AIUseCase, AIConfiguration
 from infrastructure.sqs_client import get_sqs_client
@@ -464,6 +466,9 @@ class AIFileService:
                             "extracted_content": result.extracted_content,
                             "annotation": result.annotation if result.annotation else ""
                         }
+                    elif use_case == AIUseCase.PROJECT_TAGGING.value:
+                        result = await self._ai_service.tag_action_items_with_projects(input_json, version=int(version))
+                        response = {"project_mappings": [{"action_item_id": k, "project_ids": v} for k, v in result.items()]}
                     else:
                         error_msg = f"Unsupported use case: {use_case}"
                         logger.error(error_msg)
