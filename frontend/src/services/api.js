@@ -104,8 +104,15 @@ export const useApiService = () => {
     getAllNotes: useCallback(async (userId) => {
       const params = new URLSearchParams();
       if (userId) params.append('user_id', userId);
-      return api.get(`/notes?${params.toString()}`);
+      params.append('page_size', '50'); // Request maximum allowed
+      const url = `/notes?${params.toString()}`;
+      console.log('🌐 API: getAllNotes calling:', url);
+      const response = await api.get(url);
+      console.log('📡 API: getAllNotes response:', response.data);
+      return response;
     }, [api]),
+
+
 
     getNote: useCallback(async (id) => {
       return api.get(`/notes/${id}`);

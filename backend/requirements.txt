@@ -12,4 +12,13 @@ google-auth==2.27.0  # For Google OAuth
 google-auth-oauthlib==1.2.0  # For Google OAuth
 email-validator==2.1.0  # For email validation
 python-jose[cryptography]==3.3.0
-passlib[bcrypt]==1.7.4 
+passlib[bcrypt]==1.7.4
+tenacity==8.2.3
+tabulate==0.9.0
+import-linter==1.12.0  # For enforcing import boundaries
+vcrpy==5.1.0  # For recording/replaying HTTP interactions in tests
+mypy==1.8.0  # Static type checker for Python
+ruff==0.1.9  # Fast Python linter and formatter
+pre-commit==3.6.0  # Git pre-commit hooks framework
+bandit==1.7.5  # Security linter for Python
+tenacity==8.2.3  # Retry library for robust error handling 

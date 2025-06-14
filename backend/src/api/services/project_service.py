@@ -10,10 +10,10 @@ from typing import List, Optional, Dict
 from fastapi import HTTPException
 from litellm import completion
 
-from ..models.project import Project, ProjectCreate, ProjectUpdate
-from ..repositories.project_repository import ProjectRepository
-from ..repositories.impl import get_project_repository, get_ai_service
-from ..services.ai_service import AIService
+from api.models.project import Project, ProjectCreate, ProjectUpdate
+from api.repositories.project_repository import ProjectRepository
+from api.repositories.impl import get_project_repository
+from api.services.ai_service import AIService
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -29,7 +29,8 @@ class ProjectService:
     def __init__(
         self, 
         project_repository: Optional[ProjectRepository] = None, 
-        ai_service: Optional[AIService] = None
+        ai_service: Optional[AIService] = None,
+        capb_service: Optional['CapBService'] = None
     ):
         """
         Initialize the ProjectService with a project repository.
@@ -39,9 +40,11 @@ class ProjectService:
                                 a new instance will be created.
             ai_service: Optional AIService instance. If not provided,
                         a new instance will be created.
+            capb_service: Optional CapBService instance for project tagging.
         """
         self.project_repository = project_repository or get_project_repository()
-        self.ai_service = ai_service or get_ai_service()
+        self.ai_service = ai_service or AIService()
+        self.capb_service = capb_service
     
     async def get_project(self, project_id: str) -> Project:
         """
@@ -85,11 +88,36 @@ class ProjectService:
         Returns:
             The created project as a Project domain model
         """
+        logger.info(f"Creating new project: '{project_data.name}' for user {project_data.user_id}")
+        
         # Convert to dictionary
         project_dict = project_data.dict()
         
         # Create the project
-        return await self.project_repository.create(project_dict)
+        created_project = await self.project_repository.create(project_dict)
+        logger.info(f"✅ Successfully created project {created_project.id} - '{created_project.name}'")
+        
+        # CapB: Tag existing action items with the new project
+        if self.capb_service:
+            logger.info(f"Starting CapB: Tagging existing action items with new project {created_project.id}")
+            try:
+                capb_result = await self.capb_service.run_for_user(project_data.user_id)
+                
+                if capb_result["success"]:
+                    logger.info(f"✅ CapB completed for new project: {capb_result['message']}")
+                    logger.debug(f"CapB tagged {capb_result['tagged_action_items']}/{capb_result['total_action_items']} action items after project creation")
+                else:
+                    logger.warning(f"⚠️ CapB failed but project creation succeeds: {capb_result.get('error', 'Unknown error')}")
+                    
+            except Exception as e:
+                logger.error(f"❌ CapB error after creating project {created_project.id}: {str(e)}")
+                logger.exception("Detailed exception information for CapB after project creation:")
+                # CapB failure doesn't affect project creation success
+                logger.info("Project creation succeeded despite CapB failure")
+        else:
+            logger.info(f"CapB service not available, skipping action item tagging for new project")
+        
+        return created_project
     
     async def update_project(self, project_id: str, project_update: ProjectUpdate) -> Project:
         """

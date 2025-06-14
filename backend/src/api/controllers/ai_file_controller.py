@@ -31,12 +31,7 @@ router = APIRouter(
     responses={404: {"description": "Not found"}},
 )
 
-# Dependency to get AI file service
-def get_ai_file_service_dependency() -> AIFileService:
-    """
-    Get the AI file service instance.
-    """
-    return get_ai_file_service()
+# Use FastAPI dependency injection from services layer
 
 @router.post("", response_model=APIResponse)
 async def upload_csv_file(
@@ -44,7 +39,7 @@ async def upload_csv_file(
     file: UploadFile = File(...),
     use_case: str = Form(...),
     version: int = Form(...),
-    ai_file_service: AIFileService = Depends(get_ai_file_service_dependency)
+    ai_file_service: AIFileService = Depends(get_ai_file_service)
 ):
     """
     Upload a CSV file for AI processing.
@@ -91,7 +86,7 @@ async def upload_csv_file(
 @router.get("", response_model=APIResponse)
 async def list_files(
     request: Request,
-    ai_file_service: AIFileService = Depends(get_ai_file_service_dependency)
+    ai_file_service: AIFileService = Depends(get_ai_file_service)
 ):
     """
     List all AI files for the current user.
@@ -122,7 +117,7 @@ async def list_files(
 async def get_file(
     file_id: str,
     request: Request,
-    ai_file_service: AIFileService = Depends(get_ai_file_service_dependency)
+    ai_file_service: AIFileService = Depends(get_ai_file_service)
 ):
     """
     Get an AI file by ID.
@@ -175,7 +170,7 @@ async def get_file(
 async def interrupt_file_processing(
     file_id: str,
     request: Request,
-    ai_file_service: AIFileService = Depends(get_ai_file_service_dependency)
+    ai_file_service: AIFileService = Depends(get_ai_file_service)
 ):
     """
     Interrupt the processing of an AI file.

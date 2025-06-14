@@ -1,29 +1,60 @@
 """
 Services Package
 
-This package contains service layer implementations.
+This package contains service layer implementations using FastAPI's native dependency injection.
+All service creation goes through FastAPI Depends for proper lifetime management.
+
+Dependency lifetimes:
+- Singleton: Stateless services (AI, Monitoring, Auth) - cached with @lru_cache
+- Factory: Stateful services that need fresh instances per request
+- Type aliases: Clean controller signatures with Annotated types
 """
 
-from typing import Optional
+# Re-export all service factories from FastAPI dependencies
+from .dependencies import (
+    get_ai_service,
+    get_monitoring_service,
+    get_auth_service,
+    get_action_item_service,
+    get_user_service,
+    get_ai_file_service,
+    get_capb_service,
+    get_project_service,
+    get_note_service,
+    setup_dependencies,
+    # Type aliases for controllers
+    AIServiceDep,
+    MonitoringServiceDep,
+    AuthServiceDep,
+    ActionItemServiceDep,
+    UserServiceDep,
+    AIFileServiceDep,
+    CapBServiceDep,
+    ProjectServiceDep,
+    NoteServiceDep
+)
 
-# Removed automatic import: from .ai_file_service import AIFileService
-# from ..repositories.impl import get_ai_file_repository, get_ai_file_s3_repository, get_ai_service
-
-# Singleton instances
-_ai_file_service_instance: Optional['AIFileService'] = None
-
-def get_ai_file_service():
-    """
-    Get the AI file service instance.
+__all__ = [
+    # Service factory functions
+    'get_ai_service',
+    'get_monitoring_service', 
+    'get_auth_service',
+    'get_action_item_service',
+    'get_user_service',
+    'get_ai_file_service',
+    'get_capb_service',
+    'get_project_service',
+    'get_note_service',
+    'setup_dependencies',
     
-    Returns:
-        AIFileService instance
-    """
-    global _ai_file_service_instance
-    if _ai_file_service_instance is None:
-        # Lazy import - only load when actually needed
-        from .ai_file_service import AIFileService
-        _ai_file_service_instance = AIFileService()
-    return _ai_file_service_instance
-
-__all__ = ['get_ai_file_service'] 
+    # Type aliases for controllers
+    'AIServiceDep',
+    'MonitoringServiceDep',
+    'AuthServiceDep',
+    'ActionItemServiceDep',
+    'UserServiceDep',
+    'AIFileServiceDep',
+    'CapBServiceDep',
+    'ProjectServiceDep',
+    'NoteServiceDep'
+] 

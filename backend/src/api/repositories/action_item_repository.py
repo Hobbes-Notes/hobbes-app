@@ -61,7 +61,7 @@ class ActionItemRepository:
             }
             
             # Save to DynamoDB
-            await self.dynamodb_client.put_item(self.table_name, action_item_record)
+            self.dynamodb_client.put_item(self.table_name, action_item_record)
             
             logger.info(f"✅ Repository: Created action item {action_item_id} with source_note_id={action_item_record.get('source_note_id')}")
             return ActionItem(**action_item_record)
@@ -81,7 +81,7 @@ class ActionItemRepository:
             The action item if found, None otherwise
         """
         try:
-            result = await self.dynamodb_client.get_item(
+            result = self.dynamodb_client.get_item(
                 self.table_name, 
                 {"id": action_item_id}
             )
@@ -105,10 +105,25 @@ class ActionItemRepository:
         Returns:
             The updated action item if found, None otherwise
         """
+        import time
+        start_time = time.time()
+        
         try:
+            logger.info(f"🗄️ REPO: Starting update for action item {action_item_id}")
+            logger.debug(f"🗄️ REPO: Update data - projects: {update_data.projects}")
+            
             # Get existing item first
+            check_start = time.time()
+            logger.debug(f"🗄️ REPO: Checking if action item {action_item_id} exists")
+            
             existing_item = await self.get_action_item(action_item_id)
+            
+            check_time = time.time() - check_start
+            logger.debug(f"🗄️ REPO: Existence check took {check_time:.3f}s")
+            
             if not existing_item:
+                total_time = time.time() - start_time
+                logger.warning(f"⚠️ REPO: Action item {action_item_id} not found after {total_time:.3f}s")
                 return None
             
             # Prepare update expression and values
@@ -165,25 +180,71 @@ class ActionItemRepository:
             
             update_expression = "SET " + ", ".join(update_expression_parts)
             
-            # Use expression attribute names for reserved keywords
-            expression_attribute_names = {
-                "#status": "status",
-                "#type": "type"
-            }
+            # Use expression attribute names for reserved keywords (only if needed)
+            expression_attribute_names = {}
+            if update_data.status is not None:
+                expression_attribute_names["#status"] = "status"
+            if update_data.type is not None:
+                expression_attribute_names["#type"] = "type"
             
-            await self.dynamodb_client.update_item(
-                self.table_name,
-                {"id": action_item_id},
-                update_expression,
-                expression_attribute_values,
-                expression_attribute_names
-            )
+            # Log the DynamoDB update call details
+            logger.debug(f"🗄️ REPO: Preparing DynamoDB update for {action_item_id}")
+            logger.debug(f"🗄️ REPO: Update expression: {update_expression}")
+            logger.debug(f"🗄️ REPO: Expression attribute values: {expression_attribute_values}")
+            logger.debug(f"🗄️ REPO: Expression attribute names: {expression_attribute_names}")
+            
+            # Execute DynamoDB update
+            dynamo_start = time.time()
+            logger.debug(f"🗄️ REPO: Calling DynamoDB update_item for {action_item_id}")
+            
+            # Only pass expression_attribute_names if it's not empty
+            if expression_attribute_names:
+                self.dynamodb_client.update_item(
+                    self.table_name,
+                    {"id": action_item_id},
+                    update_expression,
+                    expression_attribute_values,
+                    None,  # condition_expression
+                    expression_attribute_names
+                )
+            else:
+                self.dynamodb_client.update_item(
+                    self.table_name,
+                    {"id": action_item_id},
+                    update_expression,
+                    expression_attribute_values,
+                    None,  # condition_expression
+                    None   # expression_attribute_names
+                )
+            
+            dynamo_time = time.time() - dynamo_start
+            logger.debug(f"🗄️ REPO: DynamoDB update_item took {dynamo_time:.3f}s")
             
             # Return updated item
-            return await self.get_action_item(action_item_id)
+            get_start = time.time()
+            logger.debug(f"🗄️ REPO: Fetching updated item {action_item_id}")
+            
+            updated_item = await self.get_action_item(action_item_id)
+            
+            get_time = time.time() - get_start
+            total_time = time.time() - start_time
+            
+            if updated_item:
+                logger.info(f"✅ REPO: Successfully updated action item {action_item_id} in {total_time:.3f}s (dynamo: {dynamo_time:.3f}s, get: {get_time:.3f}s)")
+                logger.debug(f"✅ REPO: Updated item type: {type(updated_item)}")
+                logger.debug(f"✅ REPO: Updated item projects: {updated_item.projects}")
+            else:
+                logger.error(f"❌ REPO: Failed to retrieve updated item {action_item_id} after {total_time:.3f}s")
+            
+            return updated_item
             
         except Exception as e:
-            logger.error(f"Error updating action item {action_item_id}: {str(e)}")
+            total_time = time.time() - start_time
+            error_type = type(e).__name__
+            logger.error(f"❌ REPO: Failed to update action item {action_item_id} after {total_time:.3f}s")
+            logger.error(f"❌ REPO: Error type: {error_type}")
+            logger.error(f"❌ REPO: Error message: {str(e)}")
+            logger.error(f"❌ REPO: Update data was: {update_data}")
             raise
     
     async def get_action_items_by_user(self, user_id: str) -> List[ActionItem]:
@@ -258,7 +319,7 @@ class ActionItemRepository:
             if not existing_item:
                 return False
             
-            await self.dynamodb_client.delete_item(
+            self.dynamodb_client.delete_item(
                 self.table_name,
                 {"id": action_item_id}
             )

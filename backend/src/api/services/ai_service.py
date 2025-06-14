@@ -14,10 +14,10 @@ from litellm import completion
 from datetime import datetime
 import time
 
-from ..models.project import Project
-from ..models.ai import RelevanceExtraction, AIUseCase, AIConfiguration
-from ..repositories.ai_repository import AIRepository
-from ..models.note import Note
+from api.models.project import Project
+from api.models.ai import RelevanceExtraction, AIUseCase, AIConfiguration
+from api.repositories.ai_repository import AIRepository
+from api.models.note import Note
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -425,6 +425,145 @@ class AIService:
         
         except Exception as e:
             logger.exception(f"Error managing action items: {str(e)}")
+            raise
+    
+    async def tag_action_items_with_projects(self, params: Dict[str, Any], version: Optional[int] = None) -> Dict[str, List[str]]:
+        """
+        CapB: Tag action items with relevant projects based on semantic similarity.
+        
+        Args:
+            params: Dictionary containing:
+                - action_items: JSON string/list of action items to tag
+                - user_projects: JSON string/list of user's projects
+            version: Optional specific version to use. If not provided, the active configuration will be used.
+                
+        Returns:
+            Dictionary mapping action_item_id -> list of project_ids
+        """
+        logger.info("Starting project tagging process for action items")
+        
+        if not self._client:
+            logger.error("OpenAI client not initialized. Cannot tag action items with projects.")
+            return {}
+        
+        try:
+            # Extract and validate parameters
+            action_items = params.get("action_items", [])
+            user_projects = params.get("user_projects", [])
+            
+            # Convert to JSON strings if they're lists
+            if isinstance(action_items, list):
+                action_items_json = json.dumps(action_items)
+            else:
+                action_items_json = action_items
+                
+            if isinstance(user_projects, list):
+                user_projects_json = json.dumps(user_projects)
+            else:
+                user_projects_json = user_projects
+            
+            # Log input parameters
+            logger.info(f"Tagging {len(action_items) if isinstance(action_items, list) else 'unknown count'} action items with projects")
+            logger.debug(f"Action items: {action_items_json[:500]}...")
+            logger.debug(f"User projects: {user_projects_json[:500]}...")
+            
+            # Skip processing if no action items or projects
+            if not action_items or not user_projects:
+                logger.info("No action items or projects provided, returning empty mapping")
+                return {}
+            
+            # Get the configuration for project tagging
+            logger.debug(f"Fetching AI configuration for PROJECT_TAGGING use case" + (f" version {version}" if version else " (active version)"))
+            
+            if version is not None:
+                config = await self.get_configuration(AIUseCase.PROJECT_TAGGING, version)
+                if not config:
+                    logger.error(f"Configuration for PROJECT_TAGGING version {version} not found, falling back to active configuration")
+                    config = await self._get_configuration(AIUseCase.PROJECT_TAGGING)
+            else:
+                config = await self._get_configuration(AIUseCase.PROJECT_TAGGING)
+                
+            logger.debug(f"Using model: {config.model}, max_tokens: {config.max_tokens}, temperature: {config.temperature}")
+            
+            # Log the template before replacement
+            logger.debug(f"Prompt template before replacement:\n{config.user_prompt_template}")
+            
+            # Safely format the template
+            try:
+                user_prompt = config.user_prompt_template.format(
+                    action_items=action_items_json,
+                    user_projects=user_projects_json
+                )
+                logger.debug(f"Prompt after replacement (first 500 chars):\n{user_prompt[:500]}...")
+                logger.debug(f"Prepared user prompt with length: {len(user_prompt)}")
+            except KeyError as e:
+                logger.error(f"Error formatting prompt template: {str(e)}")
+                logger.error(f"Template: {config.user_prompt_template}")
+                logger.error(f"Available variables: action_items, user_projects")
+                raise ValueError(f"Error formatting prompt template: {str(e)}")
+            
+            # Append the response format
+            user_prompt += AIUseCase.PROJECT_TAGGING.response_format
+            
+            # Call OpenAI API
+            logger.info(f"Calling OpenAI API for project tagging")
+            start_time = time.time()
+            response = self._client.chat.completions.create(
+                model=config.model,
+                messages=[
+                    {"role": "system", "content": config.system_prompt},
+                    {"role": "user", "content": user_prompt}
+                ],
+                max_tokens=config.max_tokens,
+                temperature=config.temperature,
+                response_format={
+                    "type": "json_object"
+                }
+            )
+            end_time = time.time()
+            
+            # Parse the response
+            response_content = response.choices[0].message.content
+            logger.debug(f"Raw API response: {response_content}")
+            logger.info(f"API call completed in {end_time - start_time:.2f} seconds")
+            
+            try:
+                # Parse the JSON response
+                logger.debug("Attempting to parse JSON response")
+                response_json = json.loads(response_content)
+                
+                # Extract the project mappings
+                if "project_mappings" not in response_json:
+                    logger.error(f"Response JSON missing required 'project_mappings' key. Keys found: {list(response_json.keys())}")
+                    raise ValueError(f"Invalid response format: missing 'project_mappings' key. Keys found: {list(response_json.keys())}")
+                
+                project_mappings = response_json["project_mappings"]
+                
+                # Convert to the expected format: action_item_id -> list of project_ids
+                result = {}
+                for mapping in project_mappings:
+                    action_item_id = mapping.get("action_item_id")
+                    project_ids = mapping.get("project_ids", [])
+                    
+                    if action_item_id:
+                        result[action_item_id] = project_ids
+                
+                logger.info(f"AI tagged {len(result)} action items with projects")
+                for action_id, project_ids in result.items():
+                    if project_ids:
+                        logger.debug(f"Action {action_id} tagged with projects: {project_ids}")
+                    else:
+                        logger.debug(f"Action {action_id} not tagged with any projects")
+                
+                return result
+                
+            except json.JSONDecodeError as e:
+                logger.error(f"Failed to parse JSON response: {e}")
+                logger.error(f"Response content: {response_content}")
+                raise ValueError(f"Failed to parse JSON response: {e}")
+        
+        except Exception as e:
+            logger.exception(f"Error tagging action items with projects: {str(e)}")
             raise
     
     async def get_configuration(self, use_case: AIUseCase, version: int) -> Optional[AIConfiguration]:

@@ -496,4 +496,13 @@ debug-all: check-docker
 	@docker-compose logs --tail=10 backend
 	@echo ""
 	@echo "📋 Recent Logs (Frontend):"
-	@docker-compose logs --tail=10 frontend 
+	@docker-compose logs --tail=10 frontend
+
+# Phase 3 - Architecture & Quality Gates
+# =====================================
+
+# Import Linter - Architecture Validation
+.PHONY: lint-imports
+lint-imports:
+	@echo "🔍 Running Import Linter - Architecture Validation..."
+	@./scripts/lint-imports.sh 

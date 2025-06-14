@@ -5,12 +5,15 @@ DynamoDB Inspector Utility
 A utility script to inspect DynamoDB tables, their contents, and status.
 Can be run from within the Docker container for debugging and testing.
 
+This tool is part of infrastructure tooling since it has dependencies
+on infrastructure modules.
+
 Usage:
-  python utils/dynamodb_inspector.py --help
-  python utils/dynamodb_inspector.py list-tables
-  python utils/dynamodb_inspector.py describe-table Notes
-  python utils/dynamodb_inspector.py scan-table Notes --limit 5
-  python utils/dynamodb_inspector.py table-status
+  python infrastructure/_tools/dynamodb_inspector.py --help
+  python infrastructure/_tools/dynamodb_inspector.py list-tables
+  python infrastructure/_tools/dynamodb_inspector.py describe-table Notes
+  python infrastructure/_tools/dynamodb_inspector.py scan-table Notes --limit 5
+  python infrastructure/_tools/dynamodb_inspector.py table-status
 """
 
 import argparse
@@ -20,7 +23,7 @@ import os
 from typing import Dict, List, Any, Optional
 
 # Add the src directory to the path so we can import our modules
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../..'))
 
 from infrastructure.dynamodb_client import get_dynamodb_client
 

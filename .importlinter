@@ -1,0 +1,58 @@
+[importlinter]
+root_package = backend.src
+
+[importlinter:contract:layer-architecture]
+name = Layer Architecture Contract
+type = layers
+layers =
+    backend.src.api.controllers
+    backend.src.api.services
+    backend.src.api.repositories
+    backend.src.infrastructure
+
+
+[importlinter:contract:controllers-services-only]
+name = Controllers Import Services Only
+type = forbidden
+source_modules = backend.src.api.controllers
+forbidden_modules = 
+    backend.src.api.repositories
+    backend.src.infrastructure
+
+[importlinter:contract:services-repositories-only]
+name = Services Import Repositories Only
+type = forbidden
+source_modules = backend.src.api.services
+forbidden_modules = backend.src.infrastructure
+
+[importlinter:contract:utils-no-upward-deps]
+name = Utils No Upward Dependencies
+type = forbidden
+source_modules = backend.src.utils
+forbidden_modules =
+    backend.src.api
+    backend.src.infrastructure
+
+
+
+[importlinter:contract:strict-layer-separation]
+name = Strict Layer Separation
+type = forbidden
+source_modules = backend.src.api.repositories
+forbidden_modules = backend.src.api.controllers
+
+[importlinter:contract:infrastructure-isolation]
+name = Infrastructure Isolation
+type = forbidden
+source_modules = backend.src.infrastructure
+forbidden_modules = backend.src.api
+
+[importlinter:contract:test-isolation]
+name = Test Isolation
+type = forbidden
+source_modules = backend.src.tests
+forbidden_modules = 
+    backend.src.api.controllers
+    backend.src.api.services
+    backend.src.api.repositories
+    backend.src.infrastructure 

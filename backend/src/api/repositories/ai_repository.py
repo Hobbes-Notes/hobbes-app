@@ -7,7 +7,7 @@ This module defines the interface for AI configuration repositories.
 from abc import ABC, abstractmethod
 from typing import List, Optional, Dict, Any
 
-from ..models.ai import AIConfiguration, AIUseCase
+from api.models.ai import AIConfiguration, AIUseCase
 
 class AIRepository(ABC):
     """

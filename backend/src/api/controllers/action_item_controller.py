@@ -1,19 +1,20 @@
 """
-Action Item Controller Module
+Action Item Controller
 
-This controller provides endpoints for managing action items.
+Handles HTTP requests for action item management operations.
+Follows the three-things rule: parse input, call service, return response.
 """
 
 import logging
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from typing import List, Optional
 
-from ..models.action_item import ActionItem, ActionItemCreate, ActionItemUpdate
-from ..services.action_item_service import ActionItemService
-from ..models.api import APIResponse
-from .auth_controller import get_current_user
-from ..models.user import User
-from ..repositories.impl import get_action_item_service
+from api.models.action_item import ActionItem, ActionItemCreate, ActionItemUpdate
+from api.services import get_action_item_service
+from api.services.action_item_service import ActionItemService
+from api.models.api import APIResponse
+from api.controllers.auth_controller import get_current_user
+from api.models.user import User
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -25,17 +26,11 @@ router = APIRouter(
     responses={404: {"description": "Not found"}},
 )
 
-# Get action item service instance
-action_item_service = get_action_item_service()
-
-def get_action_item_service_dep() -> ActionItemService:
-    return action_item_service
-
 @router.get("", response_model=APIResponse)
 async def get_action_items(
     request: Request,
     current_user: User = Depends(get_current_user),
-    action_item_service: ActionItemService = Depends(get_action_item_service_dep)
+    action_item_service: ActionItemService = Depends(get_action_item_service)
 ):
     """
     Get all action items for the current user.
@@ -62,7 +57,7 @@ async def get_action_items_by_project(
     request: Request,
     project_id: str,
     current_user: User = Depends(get_current_user),
-    action_item_service: ActionItemService = Depends(get_action_item_service_dep)
+    action_item_service: ActionItemService = Depends(get_action_item_service)
 ):
     """
     Get action items for a specific project.
@@ -89,7 +84,7 @@ async def create_action_item(
     request: Request,
     action_item_data: ActionItemCreate,
     current_user: User = Depends(get_current_user),
-    action_item_service: ActionItemService = Depends(get_action_item_service_dep)
+    action_item_service: ActionItemService = Depends(get_action_item_service)
 ):
     """
     Create a new action item.
@@ -120,7 +115,7 @@ async def update_action_item(
     action_item_id: str,
     update_data: ActionItemUpdate,
     current_user: User = Depends(get_current_user),
-    action_item_service: ActionItemService = Depends(get_action_item_service_dep)
+    action_item_service: ActionItemService = Depends(get_action_item_service)
 ):
     """
     Update an action item.
@@ -153,7 +148,7 @@ async def delete_action_item(
     request: Request,
     action_item_id: str,
     current_user: User = Depends(get_current_user),
-    action_item_service: ActionItemService = Depends(get_action_item_service_dep)
+    action_item_service: ActionItemService = Depends(get_action_item_service)
 ):
     """
     Delete an action item.
@@ -179,4 +174,37 @@ async def delete_action_item(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error deleting action item: {str(e)}"
+        )
+
+@router.post("/retag-projects", response_model=APIResponse)
+async def retag_action_items_with_projects(
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    action_item_service: ActionItemService = Depends(get_action_item_service)
+):
+    """
+    Manually trigger CapB to retag all action items with projects.
+    This is useful for backfilling project associations on existing action items.
+    """
+    try:
+        # Import CapB service here to avoid circular imports
+        from api.services import get_capb_service
+        capb_service = get_capb_service()
+        
+        # Run CapB for the current user
+        logger.info(f"Manual CapB trigger requested by user {current_user.id}")
+        result = await capb_service.run_for_user(current_user.id)
+        
+        return APIResponse(
+            success=result["success"],
+            data=result,
+            message=result.get("message", "CapB processing completed")
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error running CapB for user {current_user.id}: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error retagging action items: {str(e)}"
         ) 

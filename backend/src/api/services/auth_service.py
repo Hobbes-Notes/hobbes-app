@@ -1,8 +1,8 @@
 """
 Authentication Service Layer
 
-This module provides service-level functionality for user authentication,
-including token validation and authentication flows.
+This module provides service-level functionality for authentication,
+including JWT token verification and user management.
 """
 
 import logging
@@ -11,9 +11,9 @@ import requests as http_requests
 from fastapi import HTTPException, status
 from datetime import datetime
 
-from api.models.user import User, UserCreate
-from .jwt_service import verify_token
-from .user_service import UserService
+from api.models.user import User, UserCreate, UserUpdate
+from api.services.jwt_service import verify_token
+from api.services.user_service import UserService
 
 logger = logging.getLogger(__name__)
 
@@ -116,4 +116,21 @@ class AuthService:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Could not validate credentials"
-            ) 
+            )
+    
+    async def get_current_user(self, token: str) -> Optional[User]:
+        """
+        Get the current user from a JWT token
+        
+        Args:
+            token: The JWT token
+            
+        Returns:
+            User object if token is valid, None otherwise
+        """
+        try:
+            return await self.validate_token(token)
+        except HTTPException:
+            return None
+        except Exception:
+            return None 

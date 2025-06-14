@@ -5,8 +5,8 @@ from typing import Dict, List, Optional
 from fastapi import HTTPException
 
 from api.repositories.project_repository import ProjectRepository
-from api.models.project import Project, ProjectCreate
-from ...models.pagination import PaginatedResponse, PaginationParams
+from api.models.project import Project, ProjectCreate, ProjectUpdate
+from api.models.pagination import PaginatedResponse, PaginationParams
 from infrastructure.dynamodb_client import get_dynamodb_client
 
 # Set up logging

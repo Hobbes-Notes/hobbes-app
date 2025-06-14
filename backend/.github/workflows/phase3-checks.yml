@@ -1,0 +1,244 @@
+name: Phase 3 - Hardening & Future-proofing
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  static-analysis:
+    runs-on: ubuntu-latest
+    name: Static Analysis & Type Checking
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.12'
+    
+    - name: Install dependencies
+      run: |
+        cd backend
+        pip install -r requirements.txt
+    
+    - name: Run ruff linting
+      run: |
+        cd backend
+        ruff check src/
+    
+    - name: Run ruff formatting check
+      run: |
+        cd backend
+        ruff format --check src/
+    
+    - name: Run mypy type checking
+      run: |
+        cd backend
+        mypy
+    
+    - name: Run import-linter
+      run: |
+        cd backend
+        import-linter --config .importlinter
+      
+    - name: Report violations
+      if: failure()
+      run: |
+        echo "❌ Static analysis violations detected!"
+        echo "Please fix linting, formatting, type checking, or import architecture issues."
+        exit 1
+
+  startup-tests:
+    runs-on: ubuntu-latest
+    name: Startup & Health Tests
+    services:
+      dynamodb:
+        image: amazon/dynamodb-local:latest
+        ports:
+          - 7777:7777
+        options: >-
+          --health-cmd "curl -f http://localhost:7777" || exit 1
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.12'
+    
+    - name: Install dependencies
+      run: |
+        cd backend
+        pip install -r requirements.txt
+    
+    - name: Run startup tests
+      run: |
+        cd backend/src
+        python -m pytest tests/test_startup.py -v --tb=short
+      env:
+        DYNAMODB_ENDPOINT: http://localhost:7777
+        
+    - name: Report startup failures
+      if: failure()
+      run: |
+        echo "❌ Application startup tests failed!"
+        echo "This indicates import errors or dependency injection issues."
+        echo "Check the FastAPI dependencies and service wiring."
+        exit 1
+
+  unit-tests:
+    runs-on: ubuntu-latest
+    name: Unit Tests with Mocked Dependencies
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+    
+    - name: Install dependencies
+      run: |
+        cd backend
+        pip install -r requirements.txt
+    
+    - name: Run unit tests
+      run: |
+        cd backend/src
+        python -m pytest tests/unit/ -v --tb=short
+        
+    - name: Generate coverage report
+      run: |
+        cd backend/src
+        python -m pytest tests/unit/ --cov=api --cov-report=xml
+        
+    - name: Upload coverage to Codecov
+      if: success()
+      uses: codecov/codecov-action@v3
+      with:
+        file: backend/src/coverage.xml
+
+  integration-tests:
+    runs-on: ubuntu-latest
+    name: Integration Tests - Golden Path
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+    
+    - name: Install dependencies
+      run: |
+        cd backend
+        pip install -r requirements.txt
+    
+    - name: Run golden path integration tests
+      run: |
+        cd backend/src
+        python -m pytest tests/integration/ -v --tb=short -k "golden_path"
+        
+    - name: Report integration failures
+      if: failure()
+      run: |
+        echo "❌ Golden path integration tests failed!"
+        echo "This indicates the service wiring is broken."
+        echo "Check the DI container configuration and service dependencies."
+        exit 1
+
+  contract-tests:
+    runs-on: ubuntu-latest
+    name: Contract Tests with VCR
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+    
+    - name: Install dependencies
+      run: |
+        cd backend
+        pip install -r requirements.txt
+    
+    - name: Run contract tests
+      run: |
+        cd backend/src
+        python -m pytest tests/contract/ -v --tb=short
+        
+    - name: Check VCR cassettes
+      run: |
+        cd backend/src
+        # Ensure VCR cassettes don't contain sensitive data
+        if grep -r "Bearer [A-Za-z0-9]" tests/fixtures/vcr_cassettes/ 2>/dev/null; then
+          echo "❌ VCR cassettes contain unredacted API keys!"
+          exit 1
+        fi
+        echo "✅ VCR cassettes are properly sanitized"
+
+  dependency-check:
+    runs-on: ubuntu-latest
+    name: Dependency Security Scan
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+    
+    - name: Install safety
+      run: pip install safety
+    
+    - name: Run security scan
+      run: |
+        cd backend
+        safety check -r requirements.txt
+        
+    - name: Check for outdated packages
+      run: |
+        cd backend
+        pip install pip-audit
+        pip-audit -r requirements.txt
+
+  architecture-summary:
+    runs-on: ubuntu-latest
+    name: Architecture Health Summary
+    needs: [static-analysis, startup-tests, unit-tests, integration-tests, contract-tests]
+    if: always()
+    
+    steps:
+    - name: Architecture Health Report
+      run: |
+        echo "## 🏗️ Phase 3 Architecture Health Report"
+        echo ""
+        echo "### Static Analysis: ${{ needs.static-analysis.result == 'success' && '✅ PASS' || '❌ FAIL' }}"
+        echo "### Startup Tests: ${{ needs.startup-tests.result == 'success' && '✅ PASS' || '❌ FAIL' }}"
+        echo "### Unit Tests: ${{ needs.unit-tests.result == 'success' && '✅ PASS' || '❌ FAIL' }}"
+        echo "### Integration Tests: ${{ needs.integration-tests.result == 'success' && '✅ PASS' || '❌ FAIL' }}"
+        echo "### Contract Tests: ${{ needs.contract-tests.result == 'success' && '✅ PASS' || '❌ FAIL' }}"
+        echo ""
+        if [[ "${{ needs.static-analysis.result }}" == "success" && 
+              "${{ needs.startup-tests.result }}" == "success" && 
+              "${{ needs.unit-tests.result }}" == "success" && 
+              "${{ needs.integration-tests.result }}" == "success" && 
+              "${{ needs.contract-tests.result }}" == "success" ]]; then
+          echo "🎉 **All Phase 3 guardrails are PASSING!**"
+          echo "The architecture is bulletproof and future-ready."
+        else
+          echo "⚠️ **Some Phase 3 guardrails are FAILING.**"
+          echo "Please fix the issues before merging."
+        fi 

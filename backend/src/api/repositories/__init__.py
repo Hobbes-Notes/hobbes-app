@@ -1,12 +1,25 @@
 """
-Repository Interfaces
+Repositories Package
 
-This module defines the interfaces for repository classes that handle
-data access operations for the application.
+This package contains repository interfaces and implementations for data access.
+Repositories handle all data persistence operations and provide a clean
+abstraction over the underlying storage mechanism.
+
+Public API:
+- BaseRepository: Generic base interface for all repositories
+- Repository implementations: Concrete data access implementations
 """
 
 from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Optional, TypeVar, Generic, Type
+
+# Import repository implementations
+from .impl import (
+    get_note_repository,
+    get_project_repository,
+    get_ai_repository,
+    get_action_item_repository
+)
 
 T = TypeVar('T')  # Entity type
 C = TypeVar('C')  # Create type
@@ -37,4 +50,13 @@ class BaseRepository(ABC, Generic[T, C, U]):
     @abstractmethod
     async def delete(self, id: str) -> bool:
         pass
+
+
+__all__ = [
+    'BaseRepository',
+    'get_note_repository',
+    'get_project_repository',
+    'get_ai_repository',
+    'get_action_item_repository'
+]
 

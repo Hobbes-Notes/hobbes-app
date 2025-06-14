@@ -1,93 +1,58 @@
 """
-Repository Implementations
+Repository Implementation Module
 
-This module provides factory functions for repository implementations.
+This module provides implementations of various repositories
+used throughout the application.
 """
 
-import os
+import logging
 from typing import Optional
 
-from api.repositories.project_repository import ProjectRepository
 from api.repositories.note_repository import NoteRepository
+from api.repositories.project_repository import ProjectRepository
 from api.repositories.ai_repository import AIRepository
 from api.repositories.action_item_repository import ActionItemRepository
+from api.repositories.impl.note_repository_impl import DynamoDBNoteRepository
+from api.repositories.impl.project_repository_impl import DynamoDBProjectRepository
+from api.repositories.impl.ai_repository_impl import AIRepositoryImpl
+from api.repositories.impl.action_item_repository_impl import DynamoDBActionItemRepository
 
-# Removed auto-imports - use lazy loading instead:
-# from .project_repository_impl import DynamoDBProjectRepository
-# from .note_repository_impl import DynamoDBNoteRepository  
-# from .ai_repository_impl import AIRepositoryImpl
-# from .user_repository_impl import UserRepositoryImpl
+# Set up logging
+logger = logging.getLogger(__name__)
 
-# from .action_item_repository_impl import DynamoDBActionItemRepository
-from api.services.ai_service import AIService
-from api.services.action_item_service import ActionItemService
-from api.repositories.ai_file_repository import AIFileRepository
-# from .ai_file_repository_impl import AIFileRepositoryImpl
-from api.repositories.s3_repository import S3Repository
-# from .s3_repository_impl import S3RepositoryImpl
-
-# Singleton instances
-_project_repository = None
-_note_repository = None
-_user_repository = None
-_action_item_repository = None
-_ai_repository_instance: Optional[AIRepository] = None
-_ai_service_instance: Optional[AIService] = None
-_action_item_service_instance: Optional[ActionItemService] = None
-_ai_file_repository_instance: Optional[AIFileRepository] = None
-_ai_file_s3_repository_instance: Optional[S3Repository] = None
-
-def get_project_repository() -> ProjectRepository:
-    """
-    Get the project repository implementation.
-    
-    Returns:
-        The project repository implementation.
-    """
-    global _project_repository
-    if _project_repository is None:
-        from .project_repository_impl import DynamoDBProjectRepository
-        _project_repository = DynamoDBProjectRepository()
-    return _project_repository
+# Singleton instances for repositories only
+_note_repository_instance = None
+_project_repository_instance = None
+_ai_repository_instance = None
+_action_item_repository_instance = None
 
 def get_note_repository() -> NoteRepository:
     """
-    Get the note repository implementation.
+    Get the note repository instance.
     
     Returns:
-        The note repository implementation.
+        NoteRepository instance
     """
-    global _note_repository
-    if _note_repository is None:
-        from .note_repository_impl import DynamoDBNoteRepository
-        _note_repository = DynamoDBNoteRepository()
-    return _note_repository
+    global _note_repository_instance
+    
+    if _note_repository_instance is None:
+        _note_repository_instance = DynamoDBNoteRepository()
+        
+    return _note_repository_instance
 
-def get_user_repository():
+def get_project_repository() -> ProjectRepository:
     """
-    Get the user repository instance.
+    Get the project repository instance.
     
     Returns:
-        The user repository instance
+        ProjectRepository instance
     """
-    global _user_repository
-    if _user_repository is None:
-        from .user_repository_impl import UserRepositoryImpl
-        _user_repository = UserRepositoryImpl()
-    return _user_repository
-
-def get_action_item_repository() -> ActionItemRepository:
-    """
-    Get the action item repository implementation.
+    global _project_repository_instance
     
-    Returns:
-        The action item repository implementation.
-    """
-    global _action_item_repository
-    if _action_item_repository is None:
-        from .action_item_repository_impl import DynamoDBActionItemRepository
-        _action_item_repository = DynamoDBActionItemRepository()
-    return _action_item_repository
+    if _project_repository_instance is None:
+        _project_repository_instance = DynamoDBProjectRepository()
+        
+    return _project_repository_instance
 
 def get_ai_repository() -> AIRepository:
     """
@@ -99,64 +64,20 @@ def get_ai_repository() -> AIRepository:
     global _ai_repository_instance
     
     if _ai_repository_instance is None:
-        from .ai_repository_impl import AIRepositoryImpl
         _ai_repository_instance = AIRepositoryImpl()
         
     return _ai_repository_instance
 
-def get_ai_service() -> AIService:
+def get_action_item_repository() -> ActionItemRepository:
     """
-    Get the AI service instance.
+    Get the action item repository instance.
     
     Returns:
-        AIService instance
+        ActionItemRepository instance
     """
-    global _ai_service_instance
+    global _action_item_repository_instance
     
-    if _ai_service_instance is None:
-        _ai_service_instance = AIService(get_ai_repository())
+    if _action_item_repository_instance is None:
+        _action_item_repository_instance = DynamoDBActionItemRepository()
         
-    return _ai_service_instance
-
-def get_action_item_service() -> ActionItemService:
-    """
-    Get the action item service instance.
-    
-    Returns:
-        ActionItemService instance
-    """
-    global _action_item_service_instance
-    
-    if _action_item_service_instance is None:
-        _action_item_service_instance = ActionItemService(get_action_item_repository())
-        
-    return _action_item_service_instance
-
-# def get_ai_file_repository() -> AIFileRepository:
-#     """
-#     Get the AI file repository instance.
-#     
-#     Returns:
-#         AIFileRepository instance
-#     """
-#     global _ai_file_repository_instance
-#     
-#     if _ai_file_repository_instance is None:
-#         _ai_file_repository_instance = AIFileRepositoryImpl()
-#         
-#     return _ai_file_repository_instance
-
-# def get_ai_file_s3_repository() -> S3Repository:
-#     """
-#     Get the AI file S3 repository instance.
-#     
-#     Returns:
-#         S3Repository instance
-#     """
-#     global _ai_file_s3_repository_instance
-#     
-#     if _ai_file_s3_repository_instance is None:
-#         bucket_name = os.environ.get('AI_FILES_S3_BUCKET', 'ai-files')
-#         _ai_file_s3_repository_instance = S3RepositoryImpl(bucket_name)
-#         
-#     return _ai_file_s3_repository_instance
+    return _action_item_repository_instance

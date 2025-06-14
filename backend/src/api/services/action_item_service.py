@@ -70,11 +70,39 @@ class ActionItemService:
         Returns:
             The updated action item if found, None otherwise
         """
+        import time
+        start_time = time.time()
+        
         try:
-            logger.info(f"Updating action item: {action_item_id}")
-            return await self.action_item_repository.update_action_item(action_item_id, update_data)
+            logger.info(f"🔧 SERVICE: Starting update for action item {action_item_id}")
+            logger.debug(f"🔧 SERVICE: Update data - projects: {update_data.projects}")
+            logger.debug(f"🔧 SERVICE: Update data - task: {getattr(update_data, 'task', 'NOT_SET')}")
+            logger.debug(f"🔧 SERVICE: Update data - status: {getattr(update_data, 'status', 'NOT_SET')}")
+            
+            # Call repository
+            repo_start = time.time()
+            logger.debug(f"🔧 SERVICE: Calling repository.update_action_item for {action_item_id}")
+            
+            result = await self.action_item_repository.update_action_item(action_item_id, update_data)
+            
+            repo_time = time.time() - repo_start
+            total_time = time.time() - start_time
+            
+            if result:
+                logger.info(f"✅ SERVICE: Successfully updated action item {action_item_id} in {total_time:.3f}s (repo: {repo_time:.3f}s)")
+                logger.debug(f"✅ SERVICE: Updated item projects: {result.projects}")
+            else:
+                logger.warning(f"⚠️ SERVICE: Repository returned None for action item {action_item_id} after {total_time:.3f}s")
+            
+            return result
+            
         except Exception as e:
-            logger.error(f"Error updating action item {action_item_id}: {str(e)}")
+            total_time = time.time() - start_time
+            error_type = type(e).__name__
+            logger.error(f"❌ SERVICE: Failed to update action item {action_item_id} after {total_time:.3f}s")
+            logger.error(f"❌ SERVICE: Error type: {error_type}")
+            logger.error(f"❌ SERVICE: Error message: {str(e)}")
+            logger.error(f"❌ SERVICE: Update data was: {update_data}")
             raise
     
     async def get_action_items_by_user(self, user_id: str) -> List[ActionItem]:

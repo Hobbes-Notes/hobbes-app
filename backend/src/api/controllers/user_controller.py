@@ -1,32 +1,38 @@
+"""
+User Controller
+
+Handles HTTP requests for user management operations.
+Follows the three-things rule: parse input, call service, return response.
+"""
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from typing import List
 
-from ..models.user import User, UserUpdate
-from ..services.user_service import UserService
-from .auth_controller import get_current_user
+from api.models.user import User, UserUpdate
+from api.services import get_user_service
+from api.services.user_service import UserService
+from api.controllers.auth_controller import get_current_user
 
 # Create router
 router = APIRouter()
 
-# Create services
-user_service = UserService()
-
-# Dependency to get services
-def get_user_service() -> UserService:
-    return user_service
-
 @router.get("/users/me", response_model=User)
-async def get_current_user_profile(current_user: User = Depends(get_current_user)):
-    return current_user
-
-@router.patch("/users/me", response_model=User)
-async def update_current_user(
-    user_data: UserUpdate,
+async def get_current_user_profile(
     current_user: User = Depends(get_current_user),
     user_service: UserService = Depends(get_user_service)
 ):
+    """Get the current user's profile."""
+    return await user_service.get_user(current_user.id)
+
+@router.patch("/users/me", response_model=User)
+async def update_current_user(
+    user_update: UserUpdate,
+    current_user: User = Depends(get_current_user),
+    user_service: UserService = Depends(get_user_service)
+):
+    """Update the current user's profile."""
     try:
-        updated_user = await user_service.update_user(current_user.id, user_data)
+        updated_user = await user_service.update_user(current_user.id, user_update)
         return updated_user
     except Exception as e:
         raise HTTPException(

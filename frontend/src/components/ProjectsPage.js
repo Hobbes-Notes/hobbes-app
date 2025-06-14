@@ -116,6 +116,10 @@ const ProjectsPage = () => {
     }
   }, [fetchProjects]);
 
+  const handleActionItemsUpdate = useCallback((updatedActionItems) => {
+    setActionItems(updatedActionItems);
+  }, []);
+
   if (error) {
     return (
       <div className="p-4 text-red-600 bg-red-100 rounded-lg">
@@ -177,7 +181,12 @@ const ProjectsPage = () => {
             </div>
           </div>
         )}
-        <Outlet context={{ onNoteCreated: handleNoteCreated, actionItems }} />
+        <Outlet context={{ 
+          onNoteCreated: handleNoteCreated, 
+          actionItems,
+          onActionItemsUpdate: handleActionItemsUpdate,
+          projects 
+        }} />
       </main>
       <div 
         className="fixed bottom-0 right-0 bg-white border-t border-gray-200 shadow-lg"
