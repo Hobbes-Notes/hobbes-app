@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Link, useNavigate, useLocation, useParams } from 'react-router-dom';
+import { useNavigate, useLocation, useParams } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { useApiService } from '../services/api';
 import { 
@@ -355,54 +355,7 @@ const Sidebar = ({
         </div>
       </div>
 
-      {/* User Controls Section */}
-      <div className="border-t border-gray-200 p-3">
-        {user && (
-          <div className="flex items-center space-x-2 mb-2">
-            {user.picture_url && (
-              <img
-                src={user.picture_url}
-                alt={user.name}
-                className="w-6 h-6 rounded-full"
-              />
-            )}
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-gray-900 truncate">
-                {user.name}
-              </p>
-              <p className="text-xs text-gray-500 truncate">{user.email}</p>
-            </div>
-          </div>
-        )}
-        <div className="space-y-0.5">
-          <Link
-            to="/profile"
-            className={`block w-full text-left px-2 py-1.5 text-sm rounded ${
-              location.pathname === '/profile'
-                ? 'bg-blue-50 text-blue-700'
-                : 'text-gray-600 hover:bg-gray-50'
-            }`}
-          >
-            Profile
-          </Link>
-          <Link
-            to="/ai-config"
-            className={`block w-full text-left px-2 py-1.5 text-sm rounded ${
-              location.pathname === '/ai-config'
-                ? 'bg-blue-50 text-blue-700'
-                : 'text-gray-600 hover:bg-gray-50'
-            }`}
-          >
-            AI Configuration
-          </Link>
-          <button
-            onClick={handleLogout}
-            className="w-full text-left px-2 py-1.5 text-sm text-red-600 hover:bg-red-50 rounded"
-          >
-            Logout
-          </button>
-        </div>
-      </div>
+
     </div>
   );
 };

@@ -11,7 +11,8 @@ const ProjectFormModal = ({
   isSubmitting = false,
   error = null,
   projects = [],
-  editingProjectId = null
+  editingProjectId = null,
+  parentProject = null
 }) => {
   const [formData, setFormData] = useState(initialData);
   const [validationErrors, setValidationErrors] = useState({});
@@ -88,6 +89,18 @@ const ProjectFormModal = ({
                   {err}
                 </div>
               ))}
+            </div>
+          )}
+          
+          {/* Show parent project information */}
+          {parentProject && (
+            <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+              <div className="text-sm text-blue-800">
+                <span className="font-medium">Parent Project:</span> {parentProject.name}
+                {parentProject.description && (
+                  <div className="text-xs text-blue-600 mt-1">{parentProject.description}</div>
+                )}
+              </div>
             </div>
           )}
           
