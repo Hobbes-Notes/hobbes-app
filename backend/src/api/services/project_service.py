@@ -186,6 +186,44 @@ class ProjectService:
             logger.error(f"Error getting or creating miscellaneous project: {str(e)}")
             raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
     
+    async def create_my_life_project(self, user_id: str) -> Project:
+        """
+        Create the root "My Life" project for a new user.
+        
+        Args:
+            user_id: The unique identifier of the user
+            
+        Returns:
+            The created "My Life" project as a Project domain model
+        """
+        try:
+            logger.info(f"Creating 'My Life' root project for new user {user_id}")
+            
+            # Check if "My Life" project already exists for this user
+            existing_project = await self.project_repository.get_by_name("My Life", user_id)
+            if existing_project and not existing_project.parent_id:
+                logger.info(f"'My Life' project already exists for user {user_id}")
+                return existing_project
+            
+            # Create the "My Life" root project
+            my_life_project_data = ProjectCreate(
+                name="My Life",
+                description="Your main life project - organize everything under this",
+                user_id=user_id,
+                parent_id=None  # This is the root project
+            )
+            
+            created_project = await self.project_repository.create(my_life_project_data.dict())
+            logger.info(f"✅ Successfully created 'My Life' root project {created_project.id} for user {user_id}")
+            
+            return created_project
+            
+        except Exception as e:
+            logger.error(f"Error creating 'My Life' project for user {user_id}: {str(e)}")
+            # Don't raise an exception here - user creation should still succeed even if project creation fails
+            logger.warning(f"User {user_id} created without 'My Life' project due to error")
+            return None
+    
     # The generate_project_summary method has been moved to AIService.
     # The create_note method now directly calls AIService.generate_project_summary.
     

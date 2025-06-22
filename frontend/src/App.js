@@ -3,9 +3,12 @@ import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { GoogleOAuthProvider } from '@react-oauth/google';
 import { AuthProvider } from './hooks/useAuth';
 import { ProtectedRoute } from './components/ProtectedRoute';
+import TopBar from './components/TopBar';
+import BottomNavigation from './components/BottomNavigation';
 import LoginPage from './components/LoginPage';
 import ProfilePage from './components/ProfilePage';
 import ProjectsPage from './components/ProjectsPage';
+import ProjectsTreePage from './components/ProjectsTreePage';
 import NotesPage from './components/NotesPage';
 import NotesView from './components/NotesView';
 import ProjectView from './components/ProjectView';
@@ -13,6 +16,16 @@ import ActionItemsPage from './components/ActionItemsPage';
 import AIConfigPage from './components/AIConfigPage';
 import AIFilesPage from './components/AIFilesPage';
 
+// Create a layout component for protected routes
+const ProtectedLayout = ({ children }) => (
+  <div className="min-h-screen bg-gray-100">
+    <TopBar />
+    <div className="pt-0 pb-20">
+      {children}
+    </div>
+    <BottomNavigation />
+  </div>
+);
 
 function App() {
   const clientId = process.env.REACT_APP_GOOGLE_CLIENT_ID;
@@ -33,7 +46,9 @@ function App() {
                 path="/"
                 element={
                   <ProtectedRoute>
-                    <ProjectsPage />
+                    <ProtectedLayout>
+                      <ProjectsPage />
+                    </ProtectedLayout>
                   </ProtectedRoute>
                 }
               />
@@ -41,7 +56,9 @@ function App() {
                 path="/projects"
                 element={
                   <ProtectedRoute>
-                    <ProjectsPage />
+                    <ProtectedLayout>
+                      <ProjectsPage />
+                    </ProtectedLayout>
                   </ProtectedRoute>
                 }
               >
@@ -51,7 +68,9 @@ function App() {
                 path="/notes"
                 element={
                   <ProtectedRoute>
-                    <ProjectsPage />
+                    <ProtectedLayout>
+                      <ProjectsPage />
+                    </ProtectedLayout>
                   </ProtectedRoute>
                 }
               >
@@ -61,7 +80,9 @@ function App() {
                 path="/action-items"
                 element={
                   <ProtectedRoute>
-                    <ProjectsPage />
+                    <ProtectedLayout>
+                      <ProjectsPage />
+                    </ProtectedLayout>
                   </ProtectedRoute>
                 }
               >
@@ -72,7 +93,9 @@ function App() {
                 path="/projects/:projectId/notes"
                 element={
                   <ProtectedRoute>
-                    <NotesPage />
+                    <ProtectedLayout>
+                      <NotesPage />
+                    </ProtectedLayout>
                   </ProtectedRoute>
                 }
               />
@@ -80,12 +103,29 @@ function App() {
                 path="/profile"
                 element={
                   <ProtectedRoute>
-                    <ProfilePage />
+                    <ProtectedLayout>
+                      <ProfilePage />
+                    </ProtectedLayout>
                   </ProtectedRoute>
                 }
               />
-              <Route path="/ai-config" element={<AIConfigPage />} />
-              <Route path="/ai-files" element={<AIFilesPage />} />
+              <Route path="/projects-tree" element={
+                <ProtectedRoute>
+                  <ProtectedLayout>
+                    <ProjectsTreePage />
+                  </ProtectedLayout>
+                </ProtectedRoute>
+              } />
+              <Route path="/ai-config" element={
+                <ProtectedLayout>
+                  <AIConfigPage />
+                </ProtectedLayout>
+              } />
+              <Route path="/ai-files" element={
+                <ProtectedLayout>
+                  <AIFilesPage />
+                </ProtectedLayout>
+              } />
             </Routes>
           </div>
         </AuthProvider>

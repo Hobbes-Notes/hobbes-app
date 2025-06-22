@@ -61,18 +61,16 @@ app.add_middleware(
 # Phase 3: Initialize FastAPI dependencies
 setup_dependencies()
 
-# Get services from dependency system
-auth_service = get_auth_service()
-user_service = get_user_service()
-
 # Create DynamoDB tables if they don't exist
 @app.on_event("startup")
 async def startup_event():
     try:
         logger.info("Initializing application...")
         
-        # Initialize auth tables only
-        await auth_service.initialize_tables()
+        # Initialize auth tables through user service (which has the dependency chain)
+        from api.repositories.impl.user_repository_impl import UserRepositoryImpl
+        user_repository = UserRepositoryImpl()
+        await user_repository.create_user_table()
         
         # Initialize project tables
         project_repository = get_project_repository()
