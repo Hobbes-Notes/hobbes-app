@@ -11,6 +11,7 @@ import ProjectsPage from './components/ProjectsPage';
 import ProjectsTreePage from './components/ProjectsTreePage';
 import NotesPage from './components/NotesPage';
 import NotesView from './components/NotesView';
+import NotepadPage from './components/NotepadPage';
 import ProjectView from './components/ProjectView';
 import ActionItemsPage from './components/ActionItemsPage';
 import AIConfigPage from './components/AIConfigPage';
@@ -113,6 +114,13 @@ function App() {
                 <ProtectedRoute>
                   <ProtectedLayout>
                     <ProjectsTreePage />
+                  </ProtectedLayout>
+                </ProtectedRoute>
+              } />
+              <Route path="/notepad" element={
+                <ProtectedRoute>
+                  <ProtectedLayout>
+                    <NotepadPage />
                   </ProtectedLayout>
                 </ProtectedRoute>
               } />
