@@ -159,7 +159,7 @@ const CollapsibleSidebar = ({
       if (onProjectCreated) {
         await onProjectCreated();
       }
-      navigate(`/projects/${response.data.id}`);
+      navigate('/projects-tree');
     } catch (error) {
       console.error('Error creating project:', error);
       const errorMessage = error.response?.data?.detail || 'Failed to create project. Please try again.';
@@ -200,7 +200,7 @@ const CollapsibleSidebar = ({
         await onProjectDeleted();
       }
       setError(null);
-      navigate('/projects');
+      navigate('/');
     } catch (error) {
       console.error('Error deleting project:', error);
       const errorMessage = error.response?.data?.detail || 'Failed to delete project. Please try again.';

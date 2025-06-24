@@ -38,23 +38,47 @@
       "items_processed": 11,
       "items_tagged": 9,
       "errors": {}
+    },
+    "2025-06-22-13": {
+      "runs": 1,
+      "successful_runs": 1,
+      "failed_runs": 0,
+      "items_processed": 13,
+      "items_tagged": 11,
+      "errors": {}
+    },
+    "2025-06-23-18": {
+      "runs": 6,
+      "successful_runs": 6,
+      "failed_runs": 0,
+      "items_processed": 10,
+      "items_tagged": 8,
+      "errors": {}
     }
   },
   "daily_stats": {
-    "2025-06-14": {
-      "runs": 11,
-      "successful_runs": 4,
-      "failed_runs": 7,
-      "items_processed": 82,
-      "items_tagged": 27,
-      "errors": {}
-    },
     "2025-06-21": {
       "runs": 2,
       "successful_runs": 2,
       "failed_runs": 0,
       "items_processed": 22,
       "items_tagged": 18,
+      "errors": {}
+    },
+    "2025-06-22": {
+      "runs": 1,
+      "successful_runs": 1,
+      "failed_runs": 0,
+      "items_processed": 13,
+      "items_tagged": 11,
+      "errors": {}
+    },
+    "2025-06-23": {
+      "runs": 6,
+      "successful_runs": 6,
+      "failed_runs": 0,
+      "items_processed": 10,
+      "items_tagged": 8,
       "errors": {}
     }
   }

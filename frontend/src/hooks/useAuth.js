@@ -208,7 +208,7 @@ export const AuthProvider = ({ children }) => {
       setUser(result.data.user);
       setAccessToken(result.data.access_token);
       setError(null);
-      navigate('/projects');
+      navigate('/');
     } catch (error) {
       console.error('Login failed:', error);
       console.error('Error details:', {
