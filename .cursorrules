@@ -1,0 +1,44 @@
+# Cursor Rules for Hobbes App Development
+
+## 🚨 CRITICAL DATA PROTECTION RULES
+
+### Git Operations
+- **NEVER** run `git clean -fd` without explicit user permission
+- **ALWAYS** use `git clean -n` first to preview deletions
+- For git resets, stick to `git reset --hard` and `git pull` only
+- DynamoDB data in `.dynamodb/` is precious - preserve at all costs
+
+### Docker & Database
+- **NEVER** run `docker-compose down -v` without warning about data loss
+- **NEVER** run `make clean` without explaining it will delete all data
+- Always check DynamoDB data status before destructive operations
+- Backup DynamoDB data before major changes
+
+### Development Environment
+- Use `make dev-start` for starting development environment
+- Use `make health-check` to verify services are running
+- DynamoDB Local runs on port 7777
+- Backend API on port 8888, Frontend on port 3000
+
+## 🛠️ Safe Development Practices
+
+### Before Any Destructive Operations
+1. Check current data status with DynamoDB queries
+2. Warn user about potential data loss
+3. Get explicit permission before proceeding
+4. Offer backup options when possible
+
+### Preferred Commands
+- ✅ `git status` - Always safe
+- ✅ `git reset --hard origin/main` - Safe for git reset
+- ✅ `docker ps` - Check running containers
+- ✅ `make health-check` - Verify services
+- ❌ `git clean -fd` - Can delete data
+- ❌ `docker-compose down -v` - Deletes volumes
+- ❌ `make clean` - Deletes all data
+
+## 📝 Project-Specific Notes
+- User: Mayank Gupta (mayank.gupta@heyhobbes.com)
+- Main project structure: Notes, Projects, ActionItems
+- DynamoDB tables: Users, Projects, Notes, ProjectNotes, action_items
+- Local development uses Docker Compose with DynamoDB Local 

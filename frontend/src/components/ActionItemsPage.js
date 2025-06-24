@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams, useOutletContext, useNavigate } from 'react-router-dom';
 import { useApiService } from '../services/api';
 import { useAuth } from '../hooks/useAuth';
@@ -7,25 +7,12 @@ import ProjectTagManager from './ProjectTagManager';
 const ActionItemsPage = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [selectedProject, setSelectedProject] = useState(null);
-  const [filteredActionItems, setFilteredActionItems] = useState([]);
 
   const { actionItemId } = useParams();
-  const { actionItems = [], projects = [] } = useOutletContext();
+  const { actionItems = [], projects = [], onActionItemsUpdate } = useOutletContext();
   const navigate = useNavigate();
   const { user } = useAuth();
   const { getAllNotes } = useApiService();
-
-  // Filter action items when selected project changes
-  useEffect(() => {
-    if (selectedProject) {
-      setFilteredActionItems(actionItems.filter(item => 
-        item.projects && item.projects.includes(selectedProject)
-      ));
-    } else {
-      setFilteredActionItems(actionItems);
-    }
-  }, [selectedProject, actionItems]);
 
   const handleNoteClick = (noteId) => {
     navigate(`/notes/${noteId}`);
@@ -171,118 +158,25 @@ const ActionItemsPage = () => {
     );
   }
 
-  // Show all action items
+  // If no specific action item is selected, show a message to use the home screen
   return (
     <div className="p-6 max-w-4xl mx-auto">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold">Action Items</h1>
-        
-        {/* Project Filter */}
-        <div className="flex items-center space-x-2">
-          <label htmlFor="project-filter" className="text-sm text-gray-600">Filter by Project:</label>
-          <select
-            id="project-filter"
-            value={selectedProject || ''}
-            onChange={(e) => setSelectedProject(e.target.value || null)}
-            className="rounded-md border-gray-300 text-sm focus:border-blue-500 focus:ring-blue-500"
+      <div className="text-center py-12">
+        <div className="text-gray-500">
+          <svg className="mx-auto h-12 w-12 text-gray-400" stroke="currentColor" fill="none" viewBox="0 0 48 48">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <h3 className="mt-2 text-sm font-medium text-gray-900">View All Action Items</h3>
+          <p className="mt-1 text-sm text-gray-500">
+            Go to the Home screen to view and filter all your action items.
+          </p>
+          <button
+            onClick={() => navigate('/')}
+            className="mt-4 px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition-colors"
           >
-            <option value="">All Projects</option>
-            {projects.map(project => (
-              <option key={project.id} value={project.id}>
-                {project.name}
-              </option>
-            ))}
-          </select>
+            Go to Home
+          </button>
         </div>
-      </div>
-      
-      <div className="space-y-4">
-        {filteredActionItems.map((item) => (
-          <div
-            key={item.id}
-            className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 hover:shadow-md transition-shadow"
-          >
-            <div className="flex items-center justify-between mb-2">
-              <h3 className="text-lg font-medium text-gray-900">
-                {item.task}
-              </h3>
-              <span className={`px-2 py-1 text-xs font-medium rounded ${
-                item.status === 'completed' 
-                  ? 'bg-green-100 text-green-800' 
-                  : 'bg-yellow-100 text-yellow-800'
-              }`}>
-                {item.status}
-              </span>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm text-gray-600 mb-3">
-              {item.doer && (
-                <div>
-                  <span className="font-medium">Doer:</span> {item.doer}
-                </div>
-              )}
-              {item.deadline && (
-                <div>
-                  <span className="font-medium">Deadline:</span> {new Date(item.deadline).toLocaleDateString()}
-                </div>
-              )}
-              {item.theme && (
-                <div>
-                  <span className="font-medium">Theme:</span> {item.theme}
-                </div>
-              )}
-            </div>
-
-            {item.context && (
-              <p className="text-gray-700 mb-3 line-clamp-2">
-                {item.context}
-              </p>
-            )}
-
-            {item.projects && item.projects.length > 0 && (
-              <div className="flex flex-wrap gap-2 mb-3">
-                {item.projects.map(projectId => (
-                  <button
-                    key={projectId}
-                    onClick={() => navigate(`/projects/${projectId}`)}
-                    className="px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded hover:bg-blue-200 transition-colors"
-                  >
-                    {getProjectName(projectId)}
-                  </button>
-                ))}
-              </div>
-            )}
-
-            <div className="text-xs text-gray-500">
-              Created: {new Date(item.created_at).toLocaleDateString()}
-              {item.source_note_id && (
-                <span className="ml-2">• Source Note: 
-                  <button
-                    onClick={() => handleNoteClick(item.source_note_id)}
-                    className="font-mono text-xs bg-blue-100 hover:bg-blue-200 text-blue-800 px-1 py-0.5 rounded transition-colors cursor-pointer"
-                    title="Click to view note"
-                  >
-                    {item.source_note_id}
-                  </button>
-                </span>
-              )}
-            </div>
-          </div>
-        ))}
-
-        {filteredActionItems.length === 0 && (
-          <div className="text-center py-12">
-            <div className="text-gray-500">
-              <svg className="mx-auto h-12 w-12 text-gray-400" stroke="currentColor" fill="none" viewBox="0 0 48 48">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              <h3 className="mt-2 text-sm font-medium text-gray-900">No action items</h3>
-              <p className="mt-1 text-sm text-gray-500">
-                {selectedProject ? 'No action items found for this project.' : 'Get started by creating your first action item.'}
-              </p>
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );

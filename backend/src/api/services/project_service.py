@@ -12,7 +12,7 @@ from litellm import completion
 
 from api.models.project import Project, ProjectCreate, ProjectUpdate
 from api.repositories.project_repository import ProjectRepository
-from api.repositories.impl import get_project_repository
+from api.repositories.impl import get_project_repository, get_ai_repository
 from api.services.ai_service import AIService
 
 # Set up logging
@@ -43,7 +43,7 @@ class ProjectService:
             capb_service: Optional CapBService instance for project tagging.
         """
         self.project_repository = project_repository or get_project_repository()
-        self.ai_service = ai_service or AIService()
+        self.ai_service = ai_service or AIService(get_ai_repository())
         self.capb_service = capb_service
     
     async def get_project(self, project_id: str) -> Project:
@@ -186,26 +186,26 @@ class ProjectService:
             logger.error(f"Error getting or creating miscellaneous project: {str(e)}")
             raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
     
-    async def create_my_life_project(self, user_id: str) -> Project:
+    async def get_or_create_my_life_project(self, user_id: str) -> Project:
         """
-        Create the root "My Life" project for a new user.
+        Get or create the "My Life" project for a user.
         
         Args:
             user_id: The unique identifier of the user
             
         Returns:
-            The created "My Life" project as a Project domain model
+            The "My Life" project as a Project domain model
         """
         try:
-            logger.info(f"Creating 'My Life' root project for new user {user_id}")
+            # Try to get the "My Life" project by name
+            my_life_project = await self.project_repository.get_by_name("My Life", user_id)
             
-            # Check if "My Life" project already exists for this user
-            existing_project = await self.project_repository.get_by_name("My Life", user_id)
-            if existing_project and not existing_project.parent_id:
-                logger.info(f"'My Life' project already exists for user {user_id}")
-                return existing_project
+            # If found, return it
+            if my_life_project:
+                return my_life_project
             
-            # Create the "My Life" root project
+            # Otherwise, create a new one
+            logger.info(f"Creating 'My Life' project for user {user_id}")
             my_life_project_data = ProjectCreate(
                 name="My Life",
                 description="Your main life project - organize everything under this",
@@ -214,15 +214,28 @@ class ProjectService:
             )
             
             created_project = await self.project_repository.create(my_life_project_data.dict())
-            logger.info(f"✅ Successfully created 'My Life' root project {created_project.id} for user {user_id}")
+            logger.info(f"✅ Successfully created 'My Life' project {created_project.id} for user {user_id}")
             
             return created_project
-            
         except Exception as e:
-            logger.error(f"Error creating 'My Life' project for user {user_id}: {str(e)}")
-            # Don't raise an exception here - user creation should still succeed even if project creation fails
-            logger.warning(f"User {user_id} created without 'My Life' project due to error")
+            logger.error(f"Error getting or creating 'My Life' project: {str(e)}")
+            # Don't raise HTTPException here - this is used by action item service
+            logger.warning(f"Failed to get/create 'My Life' project for user {user_id}: {str(e)}")
             return None
+    
+    async def create_my_life_project(self, user_id: str) -> Project:
+        """
+        Create the root "My Life" project for a new user.
+        
+        This method delegates to get_or_create_my_life_project for consistency.
+        
+        Args:
+            user_id: The unique identifier of the user
+            
+        Returns:
+            The created "My Life" project as a Project domain model
+        """
+        return await self.get_or_create_my_life_project(user_id)
     
     # The generate_project_summary method has been moved to AIService.
     # The create_note method now directly calls AIService.generate_project_summary.

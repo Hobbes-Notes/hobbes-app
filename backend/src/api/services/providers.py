@@ -75,7 +75,21 @@ def get_action_item_service(
 ) -> ActionItemService:
     """Get action item service (new instance per request)."""
     logger.debug("Creating action item service instance")
-    return ActionItemService(action_item_repository=action_item_repository)
+    # Import here to avoid circular dependencies
+    from api.services.project_service import ProjectService
+    from api.repositories.impl import get_project_repository
+    
+    # Create project service for automatic "My Life" linking
+    project_service = ProjectService(
+        project_repository=get_project_repository(),
+        ai_service=None,  # Not needed for get_or_create_my_life_project
+        capb_service=None  # Not needed for get_or_create_my_life_project
+    )
+    
+    return ActionItemService(
+        action_item_repository=action_item_repository,
+        project_service=project_service
+    )
 
 
 def get_ai_file_service() -> AIFileService:

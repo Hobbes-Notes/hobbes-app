@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Outlet, useParams, useLocation } from 'react-router-dom';
 import { useApiService } from '../services/api';
 import Sidebar from './Sidebar';
-import GlobalNoteInput from './GlobalNoteInput';
+import ActionItemsList from './ActionItemsList';
 import { useAuth } from '../hooks/useAuth';
 
 const MIN_SIDEBAR_WIDTH = 200;
@@ -14,6 +14,7 @@ const ProjectsPage = () => {
   const [actionItems, setActionItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [selectedFilterProject, setSelectedFilterProject] = useState(null);
   const [sidebarWidth, setSidebarWidth] = useState(() => {
     const savedWidth = localStorage.getItem('sidebarWidth');
     return savedWidth ? parseInt(savedWidth, 10) : DEFAULT_SIDEBAR_WIDTH;
@@ -106,6 +107,16 @@ const ProjectsPage = () => {
     fetchActionItems();
   }, [fetchProjects, fetchActionItems]);
 
+  // Auto-select "My Life" project when projects are loaded
+  useEffect(() => {
+    if (projects.length > 0 && selectedFilterProject === null) {
+      const myLifeProject = projects.find(project => project.name === "My Life");
+      if (myLifeProject) {
+        setSelectedFilterProject(myLifeProject.id);
+      }
+    }
+  }, [projects, selectedFilterProject]);
+
   const handleProjectUpdated = useCallback(async () => {
     await fetchProjects();
   }, [fetchProjects]);
@@ -118,6 +129,10 @@ const ProjectsPage = () => {
 
   const handleActionItemsUpdate = useCallback((updatedActionItems) => {
     setActionItems(updatedActionItems);
+  }, []);
+
+  const handleFilterProjectChange = useCallback((projectId) => {
+    setSelectedFilterProject(projectId);
   }, []);
 
   if (error) {
@@ -145,9 +160,10 @@ const ProjectsPage = () => {
       >
         <Sidebar 
           projects={projects} 
-          actionItems={actionItems}
           onProjectCreated={handleProjectUpdated}
           onProjectDeleted={handleProjectUpdated}
+          selectedFilterProject={selectedFilterProject}
+          onFilterProjectChange={handleFilterProjectChange}
         />
         {/* Resize handle */}
         <div
@@ -155,48 +171,22 @@ const ProjectsPage = () => {
           onMouseDown={() => setIsResizing(true)}
         />
       </div>
-      <main className="flex-1 overflow-y-auto pb-32">
-        {!hasContent && (
-          <div className="flex items-center justify-center h-full">
-            <div className="text-center">
-              <h1 className="text-4xl font-bold text-gray-900 mb-4">Welcome to Hobbes</h1>
-              <p className="text-lg text-gray-600 mb-8">Your personal knowledge management system</p>
-              <div className="space-y-4 text-gray-500">
-                <p>👈 Use the sidebar to navigate between:</p>
-                <div className="space-y-2 text-left max-w-md mx-auto">
-                  <div className="flex items-center space-x-2">
-                    <span className="w-4 h-4">✅</span>
-                    <span><strong>Action Items</strong> - Track your tasks and todos</span>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <span className="w-4 h-4">📁</span>
-                    <span><strong>Projects</strong> - Organize your work</span>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <span className="w-4 h-4">📝</span>
-                    <span><strong>Notes</strong> - Capture your thoughts</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
+      <main className="flex-1 overflow-y-auto">
+        {!hasContent ? (
+          <ActionItemsList 
+            actionItems={actionItems}
+            projects={projects}
+            selectedProject={selectedFilterProject}
+          />
+        ) : (
+          <Outlet context={{ 
+            onNoteCreated: handleNoteCreated, 
+            actionItems,
+            onActionItemsUpdate: handleActionItemsUpdate,
+            projects 
+          }} />
         )}
-        <Outlet context={{ 
-          onNoteCreated: handleNoteCreated, 
-          actionItems,
-          onActionItemsUpdate: handleActionItemsUpdate,
-          projects 
-        }} />
       </main>
-      <div 
-        className="fixed bottom-0 right-0 bg-white border-t border-gray-200 shadow-lg"
-        style={{ width: `calc(100% - ${sidebarWidth}px)` }}
-      >
-        <GlobalNoteInput 
-          projects={projects} 
-          onNoteCreated={handleNoteCreated}
-        />
-      </div>
     </div>
   );
 };

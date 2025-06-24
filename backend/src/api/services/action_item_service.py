@@ -15,18 +15,23 @@ logger = logging.getLogger(__name__)
 class ActionItemService:
     """Service for action item operations."""
     
-    def __init__(self, action_item_repository: ActionItemRepository):
+    def __init__(self, action_item_repository: ActionItemRepository, project_service=None):
         """
         Initialize the service.
         
         Args:
             action_item_repository: The action item repository to use
+            project_service: The project service to use for getting My Life project
         """
         self.action_item_repository = action_item_repository
+        self.project_service = project_service
     
     async def create_action_item(self, action_item_data: ActionItemCreate) -> ActionItem:
         """
         Create a new action item.
+        
+        Automatically links the action item to the user's "My Life" project if no
+        projects are specified.
         
         Args:
             action_item_data: The action item data
@@ -36,6 +41,20 @@ class ActionItemService:
         """
         try:
             logger.info(f"Creating action item: {action_item_data.task[:50]}...")
+            
+            # Automatically link to "My Life" project if no projects specified
+            if not action_item_data.projects and self.project_service:
+                try:
+                    my_life_project = await self.project_service.get_or_create_my_life_project(action_item_data.user_id)
+                    if my_life_project:
+                        action_item_data.projects = [my_life_project.id]
+                        logger.info(f"Auto-linked action item to My Life project: {my_life_project.id}")
+                    else:
+                        logger.warning(f"Could not find or create My Life project for user {action_item_data.user_id}")
+                except Exception as e:
+                    logger.error(f"Error linking to My Life project: {str(e)}")
+                    # Continue without linking - don't fail action item creation
+            
             action_item = await self.action_item_repository.create_action_item(action_item_data)
             logger.info(f"Successfully created action item: {action_item.id}")
             return action_item
