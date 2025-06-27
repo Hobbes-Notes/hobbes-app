@@ -8,7 +8,7 @@ const DeleteConfirmationDialog = ({ project, onConfirm, onCancel }) => (
       <p className="text-gray-600 mb-2">
         Are you sure you want to delete "{project.name}"?
       </p>
-      {project.level < 3 && (
+      {project.level < 5 && (
         <p className="text-red-600 text-sm mb-4">
           Warning: This will also delete all child projects under this project.
         </p>
@@ -110,7 +110,7 @@ const ProjectTreeItem = ({
 
         <div className="flex items-center space-x-1 opacity-0 group-hover:opacity-100 transition-opacity pr-2">
           {/* Only show add child button if not at max level */}
-          {(project.level || 1) < 3 && (
+          {(project.level || 1) < 5 && (
             <button
               onClick={() => onAddChild(project.id)}
               className="p-1 text-gray-400 hover:text-green-500 transition-colors"
