@@ -19,7 +19,7 @@ class Project(BaseModel):
     created_at: str
     user_id: str  # Owner of the project
     parent_id: Optional[str] = None  # ID of the parent project
-    level: int = 1  # Level in the hierarchy (1 to 3)
+    level: int = 1  # Level in the hierarchy (1 to 5)
 
 class ProjectUpdate(BaseModel):
     name: Optional[str] = None

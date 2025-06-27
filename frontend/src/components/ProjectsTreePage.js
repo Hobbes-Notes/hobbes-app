@@ -64,8 +64,8 @@ const ProjectCard = ({ project, projects, onAddChild, onEdit, onDelete, level = 
           
           {/* Actions */}
           <div className="flex space-x-2 ml-4">
-            {/* Only show Add Child button if level < 2 (to limit to 3 levels: 0, 1, 2) */}
-            {level < 2 && (
+            {/* Only show Add Child button if level < 4 (to limit to 5 levels: 0, 1, 2, 3, 4) */}
+            {level < 4 && (
               <button
                 onClick={() => onAddChild(project.id)}
                 className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors"
@@ -170,7 +170,7 @@ const ProjectsTreePage = () => {
       const parentProject = selectedParentId ? 
         projects.find(p => p.id === selectedParentId) : null;
       
-      // Check nesting level before making the API call (limit to 3 levels: 0, 1, 2)
+      // Check nesting level before making the API call (limit to 5 levels: 0, 1, 2, 3, 4)
       if (parentProject) {
         // Calculate parent's level by traversing up the tree
         let currentProject = parentProject;
@@ -180,8 +180,8 @@ const ProjectsTreePage = () => {
           currentProject = projects.find(p => p.id === currentProject.parent_id);
         }
         
-        if (level >= 2) {
-          setFormError("Cannot create project: Maximum nesting level (3 levels) exceeded");
+        if (level >= 4) {
+          setFormError("Cannot create project: Maximum nesting level (5 levels) exceeded");
           setIsSubmitting(false);
           return;
         }

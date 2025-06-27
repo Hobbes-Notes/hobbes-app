@@ -141,8 +141,8 @@ const CollapsibleSidebar = ({
       
       if (parentProject) {
         const parentLevel = parentProject.level || 1;
-        if (parentLevel >= 3) {
-          setError("Cannot create project: Maximum nesting level (3) exceeded");
+        if (parentLevel >= 5) {
+          setError("Cannot create project: Maximum nesting level (5) exceeded");
           setIsSubmitting(false);
           return;
         }
