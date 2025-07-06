@@ -83,3 +83,6 @@ yarn-error.log
 
 # LocalStack
 localstack/
+
+# Metrics (local consumption only)
+metrics/capb_metrics.json
