@@ -231,6 +231,8 @@ export const AuthProvider = ({ children }) => {
     flow: 'implicit'
   });
 
+
+
   const logout = async () => {
     try {
       await api.post('/auth/logout');

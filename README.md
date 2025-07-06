@@ -116,3 +116,66 @@ DAILY USAGE
 - **Consistency across environments** (Docker, local, Cursor)
 - **No hard version locks** - works with Python 3.9+ to latest
 - **Easy updates** - see `VERSION_STRATEGY.md` for details
+
+## Development Test Users (Email/Password Authentication)
+
+For testing purposes, you can set up email/password authentication alongside Google OAuth. This feature is only available in development mode.
+
+### Setting Up Test Users
+
+1. **Create test users** by setting the `TEST_USERS` environment variable in your backend:
+
+```bash
+# In your backend/.env file or environment
+export TEST_USERS='[
+  {
+    "email": "test@example.com",
+    "password": "password123",
+    "name": "Test User",
+    "id": "test_user_1"
+  },
+  {
+    "email": "admin@mycompany.com", 
+    "password": "admin123",
+    "name": "Admin User",
+    "id": "admin_user_1"
+  },
+  {
+    "email": "designer@example.com",
+    "password": "design123", 
+    "name": "Design User"
+  }
+]'
+```
+
+2. **Restart your backend** after setting the environment variable:
+
+```bash
+make dev-start
+```
+
+3. **Access the login page** and you'll see:
+   - Google OAuth login (production-ready)
+   - "Use Email/Password (Development)" button (development only)
+   - Quick-fill buttons for configured test users
+
+### Test User Configuration
+
+- **email**: Any valid email format (doesn't need to be a real email)
+- **password**: Any string (stored as plain text - development only!)
+- **name**: Display name for the user
+- **id**: Optional. If not provided, auto-generated from email hash
+
+### Features
+
+- ✅ **Environment-aware**: Only works when `NODE_ENV=development`
+- ✅ **Non-Gmail addresses**: Test with any email format
+- ✅ **Quick user switching**: Button to fill credentials instantly
+- ✅ **Auto-user creation**: Users are created in database on first login
+- ✅ **Coexists with Google OAuth**: Both authentication methods work simultaneously
+
+### Security Notes
+
+⚠️ **Development Only**: This feature is automatically disabled in production environments.
+
+⚠️ **Plain Text Passwords**: Test user passwords are stored as plain text in environment variables. Never use this for real users.

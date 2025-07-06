@@ -25,6 +25,7 @@ services:
       - "8888:8888"
     volumes:
       - .:/code
+      - ./backend:/app
     env_file:
       - .env
       - ./backend/.env
@@ -41,6 +42,7 @@ services:
       - SQS_ENDPOINT=http://localstack:4566
       - AI_FILES_S3_BUCKET=ai-files
       - AI_FILES_QUEUE_NAME=ai-files
+      - ENVIRONMENT=development
     depends_on:
       - dynamodb-local
 
