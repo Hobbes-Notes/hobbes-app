@@ -22,6 +22,8 @@ const LoginPage = () => {
     }
   }, [authError]);
 
+
+
   const handleGoogleLogin = async () => {
     try {
       setLoading(true);
@@ -35,6 +37,8 @@ const LoginPage = () => {
     }
   };
 
+
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50">
       <div className="max-w-md w-full space-y-8 p-8 bg-white rounded-lg shadow-lg">
@@ -44,11 +48,13 @@ const LoginPage = () => {
             Sign in with your Google account to continue
           </p>
         </div>
+        
         {error && (
           <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-md text-sm">
             {error}
           </div>
         )}
+
         <div className="mt-8">
           <button
             onClick={handleGoogleLogin}
@@ -69,7 +75,6 @@ const LoginPage = () => {
                   viewBox="0 0 24 24"
                   fill="currentColor"
                 >
-                  {/* Google icon path */}
                   <path d="M12.545,12.151L12.545,12.151c0,1.054,0.855,1.909,1.909,1.909h3.536c-0.607,1.972-2.405,3.404-4.545,3.404c-2.627,0-4.545-2.127-4.545-4.545s2.127-4.545,4.545-4.545c1.127,0,2.163,0.399,2.972,1.063l2.595-2.595C17.363,4.953,14.927,4,12.545,4C7.018,4,4,7.018,4,12.545s3.018,8.545,8.545,8.545c4.545,0,8.545-3.018,8.545-8.545c0-0.582-0.063-1.145-0.181-1.691h-8.364V12.151z" />
                 </svg>
                 Sign in with Google

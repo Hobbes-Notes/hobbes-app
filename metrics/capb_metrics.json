@@ -54,31 +54,47 @@
       "items_processed": 10,
       "items_tagged": 8,
       "errors": {}
-    }
-  },
-  "daily_stats": {
-    "2025-06-21": {
+    },
+    "2025-06-26-18": {
       "runs": 2,
       "successful_runs": 2,
       "failed_runs": 0,
-      "items_processed": 22,
-      "items_tagged": 18,
+      "items_processed": 10,
+      "items_tagged": 10,
       "errors": {}
     },
-    "2025-06-22": {
+    "2025-06-26-19": {
       "runs": 1,
       "successful_runs": 1,
       "failed_runs": 0,
-      "items_processed": 13,
-      "items_tagged": 11,
+      "items_processed": 8,
+      "items_tagged": 8,
       "errors": {}
     },
-    "2025-06-23": {
-      "runs": 6,
-      "successful_runs": 6,
+    "2025-06-27-02": {
+      "runs": 2,
+      "successful_runs": 2,
       "failed_runs": 0,
-      "items_processed": 10,
-      "items_tagged": 8,
+      "items_processed": 16,
+      "items_tagged": 16,
+      "errors": {}
+    },
+    "2025-07-05-09": {
+      "runs": 8,
+      "successful_runs": 8,
+      "failed_runs": 0,
+      "items_processed": 7,
+      "items_tagged": 7,
+      "errors": {}
+    }
+  },
+  "daily_stats": {
+    "2025-07-05": {
+      "runs": 8,
+      "successful_runs": 8,
+      "failed_runs": 0,
+      "items_processed": 7,
+      "items_tagged": 7,
       "errors": {}
     }
   }
