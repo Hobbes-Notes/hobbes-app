@@ -1,0 +1,10 @@
+# Include all backend requirements
+-r backend/requirements.txt
+
+# PostgreSQL support for Railway
+psycopg2-binary==2.9.9
+sqlalchemy==2.0.23
+alembic==1.13.1
+
+# Enhanced static file serving
+aiofiles==23.2.1 

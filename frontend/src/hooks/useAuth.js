@@ -4,7 +4,19 @@ import { useGoogleLogin } from '@react-oauth/google';
 import axios from 'axios';
 
 const AuthContext = createContext(null);
-const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8888';
+
+// Detect if we're running on Railway and use the appropriate API URL
+const getApiUrl = () => {
+  // If running on Railway (detected by .railway.app domain), use same origin
+  if (window.location.hostname.includes('.railway.app') || 
+      window.location.hostname.includes('.up.railway.app')) {
+    return window.location.origin;
+  }
+  // Otherwise use environment variable or localhost fallback
+  return process.env.REACT_APP_API_URL || 'http://localhost:8888';
+};
+
+const API_URL = getApiUrl();
 
 // Constants
 const ACCESS_TOKEN_EXPIRE_MINUTES = 15; // 15 minutes
