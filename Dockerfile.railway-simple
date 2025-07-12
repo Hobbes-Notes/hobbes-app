@@ -1,0 +1,41 @@
+# Simple single-stage build for Railway
+FROM python:3.11-slim
+
+# Install minimal system dependencies
+RUN apt-get update && apt-get install -y \
+    gcc \
+    libpq-dev \
+    curl \
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get clean
+
+# Set working directory
+WORKDIR /app
+
+# Copy minimal requirements first
+COPY requirements-railway-minimal.txt ./requirements.txt
+
+# Install Python dependencies with memory optimizations
+RUN pip install --no-cache-dir --no-deps \
+    fastapi uvicorn python-dotenv pydantic requests python-multipart \
+    google-auth google-auth-oauthlib email-validator passlib \
+    psycopg2-binary sqlalchemy aiofiles
+
+RUN pip install --no-cache-dir python-jose[cryptography]
+
+# Copy backend source
+COPY backend/src ./src
+
+# Copy a simple index.html for now
+RUN mkdir -p ./frontend/build && \
+    echo '<!DOCTYPE html><html><head><title>Hobbes App</title></head><body><h1>Hobbes App is Starting...</h1><p>Backend API: <a href="/health">/health</a></p></body></html>' > ./frontend/build/index.html
+
+# Create startup script
+COPY start-railway-simple.sh ./start.sh
+RUN chmod +x start.sh
+
+# Expose port
+EXPOSE 8888
+
+# Start application
+CMD ["./start.sh"] 
