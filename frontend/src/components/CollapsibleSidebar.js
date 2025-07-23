@@ -18,7 +18,7 @@ const CollapsibleSidebar = ({
   onProjectCreated, 
   onProjectDeleted 
 }) => {
-  const { user, logout } = useAuth();
+  const { user, logout, accessToken } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const { projectId: currentProjectId } = useParams();
@@ -77,7 +77,7 @@ const CollapsibleSidebar = ({
 
   // Fetch action items when action items section is expanded
   const fetchActionItems = useCallback(async () => {
-    if (!user || loading.actionItems) return;
+    if (!user || !accessToken || loading.actionItems) return;
 
     try {
       setLoading(prev => ({ ...prev, actionItems: true }));
@@ -90,7 +90,7 @@ const CollapsibleSidebar = ({
     } finally {
       setLoading(prev => ({ ...prev, actionItems: false }));
     }
-  }, [getActionItems, user, loading.actionItems]);
+  }, [getActionItems, user, accessToken, loading.actionItems]);
 
   // Toggle section expansion
   const toggleSection = (section) => {
@@ -120,10 +120,10 @@ const CollapsibleSidebar = ({
 
   // Load action items on component mount since it's default expanded
   useEffect(() => {
-    if (sectionsExpanded.actionItems && actionItems.length === 0) {
+    if (sectionsExpanded.actionItems && actionItems.length === 0 && user && accessToken) {
       fetchActionItems();
     }
-  }, [sectionsExpanded.actionItems, actionItems.length, fetchActionItems]);
+  }, [sectionsExpanded.actionItems, actionItems.length, fetchActionItems, user, accessToken]);
 
   const handleLogout = async () => {
     await logout();

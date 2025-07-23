@@ -1,0 +1,55 @@
+#!/bin/bash
+# Enhanced fly CLI wrapper that handles app-specific deployments
+# Usage: ./fly [command] [args...]
+
+# Function to detect if this is a deployment command for a specific app
+get_app_directory() {
+    local app_name=""
+    
+    # Parse arguments to find --app flag
+    for ((i=1; i<=$#; i++)); do
+        if [[ "${!i}" == "--app" ]] && [[ $((i+1)) -le $# ]]; then
+            local next_arg_index=$((i+1))
+            app_name="${!next_arg_index}"
+            break
+        elif [[ "${!i}" =~ ^--app=(.+) ]]; then
+            app_name="${BASH_REMATCH[1]}"
+            break
+        fi
+    done
+    
+    # Determine directory based on app name
+    case "$app_name" in
+        "hobbes-backend")
+            echo "backend"
+            ;;
+        "hobbes-frontend")
+            echo "frontend"
+            ;;
+        *)
+            echo ""
+            ;;
+    esac
+}
+
+# Check if this is a deploy command with a specific app
+app_dir=""
+for arg in "$@"; do
+    if [[ "$arg" == "deploy" ]]; then
+        app_dir=$(get_app_directory "$@")
+        break
+    fi
+done
+
+# If we detected an app-specific deployment, change to that directory
+if [[ -n "$app_dir" && -d "$app_dir" ]]; then
+    echo "🎯 Detected $app_dir deployment - changing to $app_dir directory"
+    cd "$app_dir" || {
+        echo "❌ Failed to change to $app_dir directory"
+        exit 1
+    }
+    exec ../scripts/fly "$@"
+else
+    # For all other commands, run from root directory
+    exec ./scripts/fly "$@"
+fi 

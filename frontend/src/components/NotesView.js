@@ -5,7 +5,7 @@ import { useAuth } from '../hooks/useAuth';
 
 const NotesView = () => {
   const { noteId } = useParams();
-  const { user } = useAuth();
+  const { user, accessToken } = useAuth();
   const { getAllNotes, getActionItems } = useApiService();
   const navigate = useNavigate();
   const [note, setNote] = useState(null);
@@ -19,7 +19,7 @@ const NotesView = () => {
 
   useEffect(() => {
     const fetchNote = async () => {
-      if (!user || !noteId) return;
+      if (!user || !noteId || !accessToken) return;
 
       try {
         setLoading(true);
@@ -67,7 +67,7 @@ const NotesView = () => {
     };
 
     fetchNote();
-  }, [noteId, user, getAllNotes]);
+  }, [noteId, user, accessToken, getAllNotes]);
 
   if (loading) {
     return (

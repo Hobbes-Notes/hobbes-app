@@ -2,6 +2,11 @@ import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import os
+from dotenv import load_dotenv
+
+# Load environment variables from .env.production or .env file
+load_dotenv('.env.production')  # Load production env first
+load_dotenv()  # Load local .env as fallback
 from api.controllers.auth_controller import router as auth_router
 from api.controllers.project_controller import router as project_router
 from api.controllers.note_controller import router as note_router
@@ -46,9 +51,10 @@ app = FastAPI(
 )
 
 # Configure CORS
+cors_origins = os.getenv("CORS_ORIGIN", "http://localhost:3000").split(",")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],  # Be more specific about allowed origins
+    allow_origins=cors_origins,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["*"],

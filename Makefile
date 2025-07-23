@@ -232,20 +232,42 @@ dev-start-backend: validate-env fix-docker-context check-docker
 	@echo "   Health:  http://localhost:8888/health"
 	@echo "   DynamoDB: http://localhost:7777"
 
-# Nuclear option - reset everything
+# ⚠️  DESTRUCTIVE: Nuclear option - reset everything (DELETES ALL LOCAL DATA)
 dev-reset: stop clean
+	@echo "🚨🚨🚨 DANGER: DESTRUCTIVE OPERATION AHEAD 🚨🚨🚨"
+	@echo ""
+	@echo "⚠️  This command will PERMANENTLY DELETE ALL LOCAL DATA:"
+	@echo "   • All Projects, Notes, Action Items in DynamoDB Local"
+	@echo "   • All Docker containers and volumes"
+	@echo "   • All local development database data"
+	@echo "   • Cache and temporary files"
+	@echo ""
+	@echo "💡 ALTERNATIVES: Try these less destructive options first:"
+	@echo "   • make stop && make dev-start    (restart containers)"
+	@echo "   • docker-compose restart backend (restart just backend)"
+	@echo "   • docker-compose down && docker-compose up -d (rebuild containers)"
+	@echo ""
+	@echo "🔥 ONLY use dev-reset if you need to completely start fresh"
+	@echo "   (like switching between different database schemas)"
+	@echo ""
+	@read -p "⚠️  Type 'DELETE_ALL_DATA' to confirm you want to proceed: " confirm; \
+	if [ "$$confirm" != "DELETE_ALL_DATA" ]; then \
+		echo "❌ Operation cancelled - your data is safe!"; \
+		exit 1; \
+	fi
+	@echo ""
 	@echo "💥 Nuclear reset in progress..."
 	@echo "Removing containers and volumes..."
 	@docker-compose down -v --remove-orphans
 	@docker system prune -f --volumes
-	@echo "Cleaning local data..."
+	@echo "🗑️  Cleaning local data (THIS DELETES YOUR DEVELOPMENT DATABASE)..."
 	@rm -rf .dynamodb/* 2>/dev/null || true
 	@rm -rf localstack/* 2>/dev/null || true
 	@rm -rf backend/src/__pycache__ 2>/dev/null || true
 	@find backend -name "*.pyc" -delete 2>/dev/null || true
 	@echo "Rebuilding from scratch..."
 	@make dev-start
-	@echo "🎉 Complete reset finished!"
+	@echo "🎉 Complete reset finished! (All previous local data has been deleted)"
 
 # Set up virtual environment
 setup-venv:
@@ -506,3 +528,30 @@ debug-all: check-docker
 lint-imports:
 	@echo "🔍 Running Import Linter - Architecture Validation..."
 	@./scripts/lint-imports.sh 
+
+# Fly.io Deployment Commands
+fly-deploy-backend:
+	@echo "🚀 Deploying backend to Fly.dev..."
+	cd backend && ../scripts/fly deploy
+
+fly-deploy-frontend:
+	@echo "🚀 Deploying frontend to Fly.dev..."
+	cd frontend && ../scripts/fly deploy
+
+fly-deploy-all:
+	@echo "🚀 Deploying both backend and frontend to Fly.dev..."
+	@$(MAKE) fly-deploy-backend
+	@$(MAKE) fly-deploy-frontend
+
+fly-status:
+	@echo "📊 Checking Fly.dev app status..."
+	@./scripts/fly status --app hobbes-backend
+	@./scripts/fly status --app hobbes-frontend
+
+fly-logs-backend:
+	@echo "📝 Showing backend logs..."
+	@./scripts/fly logs --app hobbes-backend
+
+fly-logs-frontend:
+	@echo "📝 Showing frontend logs..."
+	@./scripts/fly logs --app hobbes-frontend 

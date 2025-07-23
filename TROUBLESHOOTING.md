@@ -183,3 +183,42 @@ Before deploying or sharing with team:
 - Use `make dev-setup` for Cursor development (faster than Docker)
 - Use `make dev-reset` sparingly (it's slow but thorough)
 - Check `make logs` first before resetting everything 
+
+## Fly.io Deployment Issues
+
+### Fly CLI Location and Commands
+
+**Problem:** "fly command not found" or searching for fly CLI
+
+**Solution:** Fly CLI is located at `./scripts/fly` in the hobbes-app project root.
+
+**Available Commands:**
+- `make fly-deploy-backend` - Deploy backend only
+- `make fly-deploy-frontend` - Deploy frontend only  
+- `make fly-deploy-all` - Deploy both backend and frontend
+- `make fly-status` - Check app status
+- `make fly-logs-backend` - View backend logs
+- `make fly-logs-frontend` - View frontend logs
+
+**Direct Usage:**
+```bash
+# From hobbes-app root directory
+./scripts/fly deploy --app hobbes-backend
+./scripts/fly deploy --app hobbes-frontend
+./scripts/fly status --app hobbes-backend
+./scripts/fly logs --app hobbes-backend
+```
+
+### CORS Issues on Fly.dev
+
+**Problem:** Login works locally but fails on Fly.dev
+
+**Solution:** Check `CORS_ORIGIN` in `.env.production` file:
+```bash
+# Should be:
+CORS_ORIGIN=https://hobbes-frontend.fly.dev
+# NOT:
+CORS_ORIGIN=https://your-app-name.fly.dev
+```
+
+After fixing, deploy backend: `make fly-deploy-backend` 

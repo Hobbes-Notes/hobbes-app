@@ -13,14 +13,14 @@ const NotepadPage = () => {
   const [error, setError] = useState(null);
   const [successMessage, setSuccessMessage] = useState('');
   const [noteActionItems, setNoteActionItems] = useState({});
-  const { user } = useAuth();
+  const { user, accessToken } = useAuth();
   const { getAllNotes, createNote, getActionItems } = useApiService();
   const navigate = useNavigate();
 
   // Load past notes and their associated action items on component mount
   useEffect(() => {
     const fetchNotesAndActionItems = async () => {
-      if (!user?.id) return;
+      if (!user?.id || !accessToken) return;
       
       try {
         setLoading(true);
@@ -57,7 +57,7 @@ const NotepadPage = () => {
     };
 
     fetchNotesAndActionItems();
-  }, [user?.id, getAllNotes, getActionItems]);
+  }, [user?.id, accessToken, getAllNotes, getActionItems]);
 
   const handleSubmitNote = async () => {
     if (!newNoteContent.trim() || !user?.id) return;

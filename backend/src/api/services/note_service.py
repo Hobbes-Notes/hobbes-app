@@ -132,9 +132,21 @@ class NoteService:
             logger.info(f"⏱️ TIMING: Note repository creation took {note_creation_time:.2f}s - Created note ID: {created_note.id}")
             
             # CapA: Manage Action Items based on note content (enabled)
+            logger.info(f"🔍 CapA DEBUG: Checking CapA services availability for note {created_note.id}")
+            logger.info(f"🔍 CapA DEBUG: self.ai_service exists: {self.ai_service is not None}")
+            logger.info(f"🔍 CapA DEBUG: self.action_item_service exists: {self.action_item_service is not None}")
+            
+            if self.ai_service is None:
+                logger.error(f"❌ CapA DEBUG: AI service is None - cannot run CapA")
+            
+            if self.action_item_service is None:
+                logger.error(f"❌ CapA DEBUG: Action item service is None - cannot run CapA")
+            
             if self.ai_service and self.action_item_service:
                 capa_start_time = time.time()
                 logger.info(f"🤖 TIMING: Starting CapA (Action Item Management) for note {created_note.id}")
+                logger.info(f"🔍 CapA DEBUG: Note content length: {len(created_note.content)} characters")
+                logger.info(f"🔍 CapA DEBUG: Note content preview: {created_note.content[:100]}...")
                 try:
                     # Get existing action items for the user
                     fetch_items_start = time.time()

@@ -21,7 +21,7 @@ const ProjectsPage = () => {
   });
   const [isResizing, setIsResizing] = useState(false);
   const sidebarRef = useRef(null);
-  const { user } = useAuth();
+  const { user, accessToken } = useAuth();
   const { projectId } = useParams();
   const location = useLocation();
   const { getProjects, getActionItems } = useApiService();
@@ -68,7 +68,7 @@ const ProjectsPage = () => {
   }, [sidebarWidth]);
 
   const fetchProjects = useCallback(async () => {
-    if (!user) return;
+    if (!user || !accessToken) return; // Wait for authentication to complete
 
     try {
       setLoading(true);
@@ -81,10 +81,10 @@ const ProjectsPage = () => {
     } finally {
       setLoading(false);
     }
-  }, [getProjects, user]);
+  }, [getProjects, user, accessToken]);
 
   const fetchActionItems = useCallback(async () => {
-    if (!user) return;
+    if (!user || !accessToken) return; // Wait for authentication to complete
 
     try {
       const response = await getActionItems();
@@ -100,12 +100,15 @@ const ProjectsPage = () => {
       console.error('Error fetching action items in ProjectsPage:', error);
       // Don't set error state for action items, just log it
     }
-  }, [getActionItems, user]);
+  }, [getActionItems, user, accessToken]);
 
   useEffect(() => {
-    fetchProjects();
-    fetchActionItems();
-  }, [fetchProjects, fetchActionItems]);
+    // Only fetch when both user and accessToken are available
+    if (user && accessToken) {
+      fetchProjects();
+      fetchActionItems();
+    }
+  }, [fetchProjects, fetchActionItems, user, accessToken]);
 
   // Auto-select "My Life" project when projects are loaded
   useEffect(() => {

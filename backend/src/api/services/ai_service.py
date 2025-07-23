@@ -324,10 +324,13 @@ class AIService:
         Returns:
             List of action item operations (new, update, complete)
         """
-        logger.info("Starting action item management process")
+        logger.info("🤖 CapA AI SERVICE: Starting action item management process")
+        logger.info(f"🔍 CapA AI SERVICE DEBUG: OpenAI client initialized: {self._client is not None}")
+        logger.info(f"🔍 CapA AI SERVICE DEBUG: OpenAI API key available: {self._openai_api_key is not None}")
         
         if not self._client:
-            logger.error("OpenAI client not initialized. Cannot manage action items.")
+            logger.error("❌ CapA AI SERVICE: OpenAI client not initialized. Cannot manage action items.")
+            logger.error(f"❌ CapA AI SERVICE: OpenAI API key is: {self._openai_api_key}")
             return []
         
         try:
