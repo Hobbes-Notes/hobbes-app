@@ -86,3 +86,7 @@ localstack/
 
 # Metrics (local consumption only)
 metrics/capb_metrics.json
+
+# Fly.io CLI binaries
+scripts/fly
+*.exe
